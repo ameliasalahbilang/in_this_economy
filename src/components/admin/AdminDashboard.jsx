@@ -24,9 +24,11 @@ export default function AdminDashboard({
     actionType: null,
     targetId: null
   });
+  const [confirmActionError, setConfirmActionError] = useState('');
 
   const triggerMerchantStatusToggle = (merchant) => {
     const isCurrentlyActive = merchant.isActive !== false;
+    setConfirmActionError('');
     setConfirmModal({
       isOpen: true,
       title: isCurrentlyActive ? 'Nonaktifkan Mitra UMKM?' : 'Aktifkan Kembali Mitra?',
@@ -40,6 +42,7 @@ export default function AdminDashboard({
 
   const triggerProductStatusToggle = (product) => {
     const isCurrentlyActive = product.isActive !== false;
+    setConfirmActionError('');
     setConfirmModal({
       isOpen: true,
       title: isCurrentlyActive ? 'Nonaktifkan Produk?' : 'Aktifkan Kembali Produk?',
@@ -51,12 +54,19 @@ export default function AdminDashboard({
     });
   };
 
-  const handleConfirmAction = () => {
-    if (confirmModal.actionType === 'toggle_merchant') {
-      if (onToggleMerchantStatus) onToggleMerchantStatus(confirmModal.targetId);
-    } else if (confirmModal.actionType === 'toggle_product') {
-      if (onToggleProductStatus) onToggleProductStatus(confirmModal.targetId);
+  const handleConfirmAction = async () => {
+    try {
+      if (confirmModal.actionType === 'toggle_merchant') {
+        if (onToggleMerchantStatus) await onToggleMerchantStatus(confirmModal.targetId);
+      } else if (confirmModal.actionType === 'toggle_product') {
+        if (onToggleProductStatus) await onToggleProductStatus(confirmModal.targetId);
+      }
+    } catch (error) {
+      console.error('Gagal memperbarui status:', error);
+      setConfirmActionError(error.message || 'Gagal memperbarui status. Silakan coba lagi.');
+      return;
     }
+    setConfirmActionError('');
     setConfirmModal({ isOpen: false, title: '', message: '', actionType: null, targetId: null });
   };
 
@@ -563,6 +573,11 @@ export default function AdminDashboard({
             <p className="text-xs text-slate-500 dark:text-slate-400 font-medium leading-relaxed">
               {confirmModal.message}
             </p>
+            {confirmActionError && (
+              <p role="alert" className="text-xs font-bold text-rose-500">
+                {confirmActionError}
+              </p>
+            )}
 
             <div className="flex items-center gap-2 pt-2">
               <button

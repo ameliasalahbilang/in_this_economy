@@ -7,96 +7,243 @@ import VendorDashboard from "./components/vendor/VendorDashboard";
 import AdminDashboard from "./components/admin/AdminDashboard";
 import VendorForm from "./components/vendor/VendorForm";
 import LoginForm from "./components/auth/LoginForm";
-import { mockFoods } from "./data/mockData";
-import { mockMerchants } from "./data/mockData";
 import { mockFoods as initialFoods } from "./data/mockData";
+import { isSupabaseConfigured, supabase } from "./supabase";
 import {
   calculateDistanceInKm,
   getUserCoordinates,
   UNS_COORDINATES,
 } from "./utils/location";
 
+const mapSupabaseMerchant = (row) => ({
+  id: row.id,
+  name: row.store_name,
+  storeName: row.store_name,
+  owner: row.owner_name || "",
+  ownerName: row.owner_name || "",
+  phone: row.phone || "",
+  gmapsUrl: row.gmaps_url || "",
+  category: row.category || "makan",
+  isActive: row.is_active !== false,
+  lat: row.lat == null ? undefined : Number(row.lat),
+  lng: row.lng == null ? undefined : Number(row.lng),
+  role: "umkm",
+});
+
+const mapSupabaseProduct = (row) => ({
+  id: row.id,
+  name: row.name,
+  merchantId: row.merchant_id,
+  storeName: row.store_name || "",
+  category: row.category || "makan",
+  originalPrice: Number(row.original_price),
+  discountPrice: Number(row.discount_price ?? row.original_price),
+  isLateNight: Boolean(row.is_late_night),
+  promoTag: row.promo_tag || null,
+  image: row.image || "",
+  isActive: row.is_active !== false,
+});
+
+const getCoordinatesFromMapUrl = (mapUrl) => {
+  const match = mapUrl.match(/(-?\d+(?:\.\d+)?)[,/]\s*(-?\d+(?:\.\d+)?)/);
+  if (!match) return {};
+  return { lat: Number(match[1]), lng: Number(match[2]) };
+};
+
+const toSupabaseProduct = (product) => ({
+  merchant_id: product.merchantId,
+  store_name: product.storeName,
+  name: product.name,
+  category: product.category || null,
+  original_price: product.originalPrice,
+  discount_price: product.discountPrice,
+  is_late_night: Boolean(product.isLateNight),
+  promo_tag: product.promoTag || null,
+  image: product.image || null,
+  is_active: product.isActive !== false,
+});
+
 export default function App() {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [darkMode, setDarkMode] = useState(() => {
     return localStorage.getItem("theme") === "dark";
   });
-  const [products, setProducts] = useState(() => {
-    const saved = localStorage.getItem("app_products");
-    return saved ? JSON.parse(saved) : mockFoods;
-  });
-  const [merchants, setMerchants] = useState(() => {
-    const saved = localStorage.getItem("app_registered_merchants");
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-    }
-    return mockMerchants;
-  });
-  useEffect(() => {
-    localStorage.setItem("app_products", JSON.stringify(products));
-  }, [products]);
-  useEffect(() => {
-    localStorage.setItem("app_registered_merchants", JSON.stringify(merchants));
-  }, [merchants]);
+  const [products, setProducts] = useState([]);
+  const [productError, setProductError] = useState("");
+  const [merchants, setMerchants] = useState([]);
 
   useEffect(() => {
-    const handleStorageChange = (e) => {
-      if (e.key === "app_products" && e.newValue) {
-        setProducts(JSON.parse(e.newValue));
+    if (!isSupabaseConfigured) {
+      setProductError(
+        "Supabase belum dikonfigurasi. Isi VITE_SUPABASE_URL dan VITE_SUPABASE_ANON_KEY untuk memuat data.",
+      );
+      return undefined;
+    }
+
+    let isMounted = true;
+    const channel = supabase
+      .channel("catalog-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "products" },
+        (payload) => {
+          if (!isMounted) return;
+          if (payload.eventType === "DELETE") {
+            setProducts((current) =>
+              current.filter((product) => product.id !== payload.old.id),
+            );
+            return;
+          }
+
+          const product = mapSupabaseProduct(payload.new);
+          setProducts((current) => {
+            const existingIndex = current.findIndex(
+              (item) => item.id === product.id,
+            );
+            if (existingIndex === -1) return [product, ...current];
+            return current.map((item) =>
+              item.id === product.id ? product : item,
+            );
+          });
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "merchants" },
+        (payload) => {
+          if (!isMounted) return;
+          if (payload.eventType === "DELETE") {
+            setMerchants((current) =>
+              current.filter((merchant) => merchant.id !== payload.old.id),
+            );
+            return;
+          }
+
+          const merchant = mapSupabaseMerchant(payload.new);
+          setMerchants((current) => {
+            const existingIndex = current.findIndex(
+              (item) => item.id === merchant.id,
+            );
+            if (existingIndex === -1) return [merchant, ...current];
+            return current.map((item) =>
+              item.id === merchant.id ? merchant : item,
+            );
+          });
+        },
+      )
+      .subscribe();
+
+    const loadCatalog = async () => {
+      const [merchantsResult, productsResult] = await Promise.all([
+        supabase.from("merchants").select("*"),
+        supabase.from("products").select("*"),
+      ]);
+
+      if (!isMounted) return;
+      if (merchantsResult.error) {
+        console.error(
+          "Gagal memuat merchant dari Supabase:",
+          merchantsResult.error,
+        );
+        setProductError(
+          `Gagal memuat data merchant: ${merchantsResult.error.message}`,
+        );
+      } else {
+        setMerchants(merchantsResult.data.map(mapSupabaseMerchant));
       }
-      if (e.key === "app_registered_merchants" && e.newValue) {
-        setMerchants(JSON.parse(e.newValue));
+
+      if (productsResult.error) {
+        console.error(
+          "Gagal memuat produk dari Supabase:",
+          productsResult.error,
+        );
+        setProductError(
+          `Gagal memuat katalog: ${productsResult.error.message}`,
+        );
+      } else {
+        setProducts(productsResult.data.map(mapSupabaseProduct));
+        if (!merchantsResult.error) setProductError("");
       }
     };
 
-    window.addEventListener("storage", handleStorageChange);
-    return () => window.removeEventListener("storage", handleStorageChange);
+    loadCatalog().catch((error) => {
+      console.error("Gagal memuat katalog Supabase:", error);
+      if (isMounted)
+        setProductError("Terjadi kesalahan saat memuat data Supabase.");
+    });
+
+    return () => {
+      isMounted = false;
+      supabase.removeChannel(channel);
+    };
   }, []);
 
-  const handleToggleMerchantStatus = (merchantId) => {
-    setMerchants((prev) => {
-      const updated = prev.map((m) => {
-        if (m.id === merchantId) {
-          return {
-            ...m,
-            isActive: m.isActive === undefined ? false : !m.isActive,
-          };
-        }
-        return m;
-      });
-      localStorage.setItem("app_registered_merchants", JSON.stringify(updated));
-      return updated;
-    });
-  };
-  const handleToggleProductStatus = (productId) => {
-    setProducts((prev) => {
-      const updated = prev.map((p) => {
-        if (p.id === productId) {
-          return {
-            ...p,
-            isActive: p.isActive === undefined ? false : !p.isActive,
-          };
-        }
-        return p;
-      });
-      localStorage.setItem("app_products", JSON.stringify(updated));
-      return updated;
-    });
+  const handleRegisterMerchant = async (merchant) => {
+    if (!supabase) throw new Error("Supabase belum dikonfigurasi.");
+    const coordinates = getCoordinatesFromMapUrl(merchant.gmapsUrl);
+    const { data, error } = await supabase
+      .from("merchants")
+      .insert({
+        store_name: merchant.storeName,
+        owner_name: merchant.ownerName,
+        phone: merchant.phone,
+        gmaps_url: merchant.gmapsUrl,
+        category: merchant.category,
+        is_active: true,
+        lat: merchant.lat ?? coordinates.lat ?? null,
+        lng: merchant.lng ?? coordinates.lng ?? null,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Gagal mendaftarkan merchant:", error);
+      throw error;
+    }
+
+    const savedMerchant = mapSupabaseMerchant(data);
+    setMerchants((current) => [
+      savedMerchant,
+      ...current.filter((item) => item.id !== savedMerchant.id),
+    ]);
+    return savedMerchant;
   };
 
-  const activeStoreNames = merchants
-    .filter((m) => m.isActive !== false)
-    .map((m) => m.name);
+  const handleToggleMerchantStatus = async (merchantId) => {
+    if (!supabase) throw new Error("Supabase belum dikonfigurasi.");
+    const merchant = merchants.find((item) => item.id === merchantId);
+    if (!merchant) throw new Error("Merchant tidak ditemukan.");
+    const { data, error } = await supabase
+      .from("merchants")
+      .update({ is_active: merchant.isActive === false })
+      .eq("id", merchantId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Gagal mengubah status merchant:", error);
+      throw error;
+    }
+    const savedMerchant = mapSupabaseMerchant(data);
+    setMerchants((current) =>
+      current.map((item) => (item.id === merchantId ? savedMerchant : item)),
+    );
+  };
+  const handleToggleProductStatus = async (productId) => {
+    const product = products.find((item) => item.id === productId);
+    if (!product) throw new Error("Produk tidak ditemukan.");
+    await updateProduct({
+      ...product,
+      isActive: product.isActive === false,
+    });
+  };
 
   const getFoodCoordinates = (food) => {
     if (Number.isFinite(food.lat) && Number.isFinite(food.lng)) {
       return { lat: food.lat, lng: food.lng };
     }
 
-    const merchant = merchants.find(
-      (item) => (item.name || item.storeName) === food.storeName,
-    );
+    const merchant = merchants.find((item) => item.id === food.merchantId);
     const mapUrl = food.gmapsUrl || merchant?.gmapsUrl || "";
     const match = mapUrl.match(/(-?\d+(?:\.\d+)?)[,/]\s*(-?\d+(?:\.\d+)?)/);
     if (!match) return null;
@@ -106,21 +253,73 @@ export default function App() {
     return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
   };
 
-  const visibleProductsForUser = products.filter((product) => {
+  const enrichedProducts = products.map((product) => {
+    const merchant =
+      merchants.find((item) => item.id === product.merchantId) ||
+      merchants.find((item) => item.storeName === product.storeName);
+    return {
+      ...product,
+      merchantId: product.merchantId || merchant?.id,
+      storeName: product.storeName || merchant?.storeName || "",
+      ownerName: merchant?.ownerName || "",
+      whatsapp: merchant?.phone || "",
+      gmapsUrl: merchant?.gmapsUrl || "",
+      lat: merchant?.lat,
+      lng: merchant?.lng,
+    };
+  });
+
+  const visibleProductsForUser = enrichedProducts.filter((product) => {
     const isProductActive = product.isActive !== false;
-    const storeMerchant = merchants.find(
-      (m) => (m.name || m.storeName) === product.storeName,
-    );
+    const storeMerchant = merchants.find((m) => m.id === product.merchantId);
     const isStoreActive = storeMerchant
       ? storeMerchant.isActive !== false
       : true;
 
     return isProductActive && isStoreActive;
   });
-  const handleAddProduct = (newProduct) => {
-    const updated = [newProduct, ...products];
-    setProducts(updated);
-    localStorage.setItem("app_products", JSON.stringify(updated));
+  const handleAddProduct = async (newProduct) => {
+    if (!supabase) throw new Error("Supabase belum dikonfigurasi.");
+    if (!newProduct.merchantId) throw new Error("Merchant produk tidak valid.");
+    const { data, error } = await supabase
+      .from("products")
+      .insert(toSupabaseProduct(newProduct))
+      .select()
+      .single();
+    if (error) {
+      setProductError(`Gagal menerbitkan produk: ${error.message}`);
+      throw error;
+    }
+    setProductError("");
+    const savedProduct = mapSupabaseProduct(data);
+    setProducts((current) => [
+      savedProduct,
+      ...current.filter((item) => item.id !== savedProduct.id),
+    ]);
+    return savedProduct;
+  };
+
+  const updateProduct = async (product) => {
+    if (!supabase) throw new Error("Supabase belum dikonfigurasi.");
+    if (!product.merchantId) throw new Error("Merchant produk tidak valid.");
+    const { data, error } = await supabase
+      .from("products")
+      .update(toSupabaseProduct(product))
+      .eq("id", product.id)
+      .select()
+      .single();
+    if (error) {
+      setProductError(`Gagal memperbarui produk: ${error.message}`);
+      throw error;
+    }
+    setProductError("");
+    const savedProduct = mapSupabaseProduct(data);
+    setProducts((current) =>
+      current.map((item) =>
+        item.id === savedProduct.id ? savedProduct : item,
+      ),
+    );
+    return savedProduct;
   };
 
   const [currentUser, setCurrentUser] = useState(null);
@@ -221,19 +420,20 @@ export default function App() {
     );
   }, []);
 
-  const handleDeleteProduct = (id) => {
-    setFoods(foods.filter((f) => f.id !== id));
+  const handleDeleteProduct = async (id) => {
+    if (!supabase) throw new Error("Supabase belum dikonfigurasi.");
+    const { error } = await supabase.from("products").delete().eq("id", id);
+    if (error) {
+      setProductError(`Gagal menghapus produk: ${error.message}`);
+      throw error;
+    }
+    setProducts((current) => current.filter((item) => item.id !== id));
   };
 
-  const handleToggleLateNight = (productId) => {
-    setFoods(
-      foods.map((item) => {
-        if (item.id === productId) {
-          return { ...item, isLateNight: !item.isLateNight };
-        }
-        return item;
-      }),
-    );
+  const handleToggleLateNight = async (productId) => {
+    const product = products.find((item) => item.id === productId);
+    if (!product) throw new Error("Produk tidak ditemukan.");
+    await updateProduct({ ...product, isLateNight: !product.isLateNight });
   };
 
   const handleBudgetCalculated = (newCalc) => {
@@ -327,7 +527,7 @@ export default function App() {
       } ${darkMode ? "dark bg-slate-950 text-slate-100" : "bg-slate-50 text-slate-800"}`}
     >
       <header
-        className={`sticky top-0 z-30 py-3.5 px-4 md:px-6 border-b backdrop-blur-md transition-colors ${
+        className={`sticky top-0 z-30 py-3 px-4 md:px-6 border-b backdrop-blur-md transition-colors ${
           darkMode
             ? "bg-slate-950/80 border-slate-800 text-slate-100"
             : "bg-white/80 border-slate-200 text-slate-800"
@@ -340,38 +540,42 @@ export default function App() {
               : currentUser
                 ? "max-w-6xl"
                 : "max-w-7xl"
-          } mx-auto flex justify-between items-center`}
+          } mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3`}
         >
-          <div>
+          {/* BAGIAN ATAS (HP): Judul & Badges */}
+          <div className="w-full sm:w-auto">
             <div className="flex items-center gap-2">
-              <h1 className="font-black text-xl md:text-2xl text-emerald-500 tracking-tight">
+              <h1 className="font-black text-lg sm:text-xl md:text-2xl text-emerald-500 tracking-tight leading-tight">
                 In This Economy
               </h1>
-              <span className="hidden sm:inline-block text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 whitespace-nowrap">
                 STUDENT DEALS
               </span>
             </div>
-            <p className="text-[11px] text-slate-400 font-medium">
+            <p className="text-[11px] text-slate-400 font-medium mt-0.5">
               {currentUser
                 ? `Mode Dashboard ${currentUser.role === "admin" ? "Super Admin" : "Mitra"} (${currentUser.name})`
                 : "Alokasi Budget & Smart Partner Platform"}
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* BAGIAN BAWAH (HP): Tombol Action */}
+          <div className="flex items-center justify-start sm:justify-end gap-2 flex-wrap w-full sm:w-auto pt-1 sm:pt-0">
             <button
               type="button"
               onClick={handleInstallClick}
-              className={`inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-[11px] font-extrabold text-emerald-600 transition-all hover:bg-emerald-500/20 active:scale-95 dark:text-emerald-400 ${
+              aria-label="Install App"
+              className={`inline-flex items-center gap-1.5 rounded-xl border bg-emerald-500/10 px-3 py-1.5 text-xs font-extrabold text-emerald-600 transition-all hover:bg-emerald-500/20 active:scale-95 dark:text-emerald-400 ${
                 darkMode ? "border-emerald-500/20" : "border-emerald-200"
               }`}
             >
               <Download className="h-3.5 w-3.5" aria-hidden="true" />
               <span>Install App</span>
             </button>
+
             <button
               onClick={() => setDarkMode(!darkMode)}
-              className={`p-2.5 rounded-xl border transition-all flex items-center justify-center ${
+              className={`p-2 rounded-xl border transition-all flex items-center justify-center ${
                 darkMode
                   ? "bg-slate-800 border-slate-700 text-amber-400 hover:bg-slate-700"
                   : "bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200"
@@ -416,7 +620,7 @@ export default function App() {
                 >
                   <span>{activeTab === "saved" ? "← Feed" : "★ Favorit"}</span>
                   {savedDeals.length > 0 && activeTab !== "saved" && (
-                    <span className="bg-amber-600 text-white text-[10px] font-black px-1.5 py-0.2 rounded-full">
+                    <span className="bg-amber-600 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full">
                       {savedDeals.length}
                     </span>
                   )}
@@ -444,6 +648,14 @@ export default function App() {
       <main
         className={`mt-0 ${currentUser ? "w-full px-0" : "max-w-7xl mx-auto px-3 md:px-6"}`}
       >
+        {productError && (
+          <div
+            role="alert"
+            className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs font-semibold text-amber-700 dark:text-amber-300"
+          >
+            {productError}
+          </div>
+        )}
         {currentUser?.role === "admin" ? (
           <AdminDashboard
             foods={products}
@@ -458,7 +670,9 @@ export default function App() {
         ) : currentUser?.role === "umkm" ? (
           <VendorDashboard
             products={products}
-            setProducts={setProducts}
+            onAddProduct={handleAddProduct}
+            onUpdateProduct={updateProduct}
+            onToggleProductStatus={handleToggleProductStatus}
             currentUser={currentUser}
             userLocation={userLocation}
             foods={foods}
@@ -824,6 +1038,8 @@ export default function App() {
             </button>
             <LoginForm
               darkMode={darkMode}
+              merchants={merchants}
+              onRegister={handleRegisterMerchant}
               onLogin={(user) => {
                 setCurrentUser(user);
                 setShowLoginModal(false);

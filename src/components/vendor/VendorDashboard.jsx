@@ -3,7 +3,9 @@ import VendorForm from "./VendorForm";
 
 export default function VendorDashboard({
   products,
-  setProducts,
+  onAddProduct,
+  onUpdateProduct,
+  onToggleProductStatus,
   currentUser,
   userLocation,
   onLogout,
@@ -19,7 +21,9 @@ export default function VendorDashboard({
   const currentStoreName = currentUser?.storeName || currentUser?.name || "";
 
   const merchantProducts = (products || []).filter(
-    (p) => p.storeName?.toLowerCase() === currentStoreName?.toLowerCase(),
+    (product) => product.merchantId
+      ? product.merchantId === currentUser?.id
+      : product.storeName?.toLowerCase() === currentStoreName?.toLowerCase(),
   );
 
   const isPromoItem = (p) =>
@@ -41,34 +45,29 @@ export default function VendorDashboard({
     return true;
   });
 
-  const handleAddProduct = (newProduct) => {
-    if (typeof setProducts === "function") {
-      setProducts((prev) => [{ ...newProduct, isActive: true }, ...prev]);
-    }
+  const handleAddProduct = async (newProduct) => {
+    await onAddProduct(newProduct);
     setToastMessage("Menu baru berhasil diterbitkan!");
   };
 
-  const handleUpdateProduct = (updatedProduct) => {
-    if (typeof setProducts === "function") {
-      setProducts((prev) =>
-        prev.map((p) => (p.id === updatedProduct.id ? updatedProduct : p)),
-      );
-    }
+  const handleUpdateProduct = async (updatedProduct) => {
+    await onUpdateProduct(updatedProduct);
     setToastMessage("Perubahan menu berhasil disimpan!");
   };
 
-  const executeToggleActive = () => {
+  const executeToggleActive = async () => {
     if (!confirmTarget) return;
 
     const targetId = confirmTarget.id;
     const isCurrentlyActive = confirmTarget.isActive !== false;
 
-    if (typeof setProducts === "function") {
-      setProducts((prev) =>
-        prev.map((p) =>
-          p.id === targetId ? { ...p, isActive: !isCurrentlyActive } : p,
-        ),
-      );
+    try {
+      await onToggleProductStatus(targetId);
+    } catch (error) {
+      console.error("Gagal mengubah status produk:", error);
+      setConfirmTarget(null);
+      setToastMessage("Gagal memperbarui status menu. Silakan coba lagi.");
+      return;
     }
 
     const message = isCurrentlyActive

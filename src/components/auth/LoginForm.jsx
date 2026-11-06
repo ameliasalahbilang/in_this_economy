@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-export default function LoginForm({ onLogin, darkMode }) {
+export default function LoginForm({ onLogin, onRegister, merchants = [], darkMode }) {
   const [isRegister, setIsRegister] = useState(false);
   const [storeName, setStoreName] = useState('');
   const [ownerName, setOwnerName] = useState('');
@@ -12,8 +12,9 @@ export default function LoginForm({ onLogin, darkMode }) {
 
   // State Alert Pesan Error di Dalam Modal
   const [errorMessage, setErrorMessage] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMessage('');
 
@@ -29,53 +30,64 @@ export default function LoginForm({ onLogin, darkMode }) {
       return;
     }
 
-    // 2. Ambil Database Akun UMKM dari LocalStorage
-    const savedMerchants = JSON.parse(localStorage.getItem('app_registered_merchants') || '[]');
-
     if (isRegister) {
-      // --- ALUR REGISTRASI UMKM BARU ---
       if (!storeName || !ownerName || !phone || !password || !gmapsUrl) {
         setErrorMessage("Mohon lengkapi seluruh data pendaftaran toko.");
         return;
       }
 
-      const existingMerchant = savedMerchants.find(m => m.phone === phone);
+      const existingMerchant = merchants.find((merchant) => merchant.phone === phone);
       if (existingMerchant) {
         setErrorMessage("Nomor WhatsApp ini sudah terdaftar! Silakan pindah ke menu Masuk.");
         return;
       }
 
-      const newMerchant = {
-        id: Date.now(),
-        name: storeName,
-        owner: ownerName,
-        phone: phone,
-        password: password,
-        gmapsUrl: gmapsUrl,
-        category: category,
-        role: 'umkm'
-      };
-
-      const updatedMerchants = [...savedMerchants, newMerchant];
-      localStorage.setItem('app_registered_merchants', JSON.stringify(updatedMerchants));
-
-      onLogin(newMerchant);
-
+      setIsSubmitting(true);
+      try {
+        const savedMerchant = await onRegister({
+          storeName,
+          ownerName,
+          phone,
+          gmapsUrl,
+          category,
+        });
+        const credentials = JSON.parse(localStorage.getItem('app_merchant_credentials') || '{}');
+        localStorage.setItem(
+          'app_merchant_credentials',
+          JSON.stringify({ ...credentials, [phone]: password }),
+        );
+        onLogin({ ...savedMerchant, role: 'umkm' });
+      } catch (error) {
+        console.error('Gagal mendaftarkan mitra:', error);
+        setErrorMessage(error.message || 'Pendaftaran gagal. Silakan coba lagi.');
+      } finally {
+        setIsSubmitting(false);
+      }
     } else {
-      // --- ALUR LOGIN UMKM KETAT ---
       if (!phone || !password) {
         setErrorMessage("Masukkan Nomor WhatsApp dan Password toko kamu.");
         return;
       }
 
-      const matchedMerchant = savedMerchants.find(
-        m => m.phone === phone && m.password === password
-      );
+      const merchant = merchants.find((item) => item.phone === phone);
+      let credentials = {};
+      try {
+        credentials = JSON.parse(
+          localStorage.getItem('app_merchant_credentials') || '{}',
+        );
+      } catch (error) {
+        console.error('Gagal membaca kredensial lokal:', error);
+        setErrorMessage('Data login lokal rusak. Silakan daftar kembali.');
+        return;
+      }
+      const storedPassword = credentials[phone];
 
-      if (matchedMerchant) {
-        onLogin(matchedMerchant);
+      if (merchant && storedPassword === password) {
+        onLogin({ ...merchant, role: 'umkm' });
       } else {
-        setErrorMessage("Nomor WhatsApp atau Password salah! Belum punya akun? Klik 'Daftar Toko Baru' di bawah.");
+        setErrorMessage(
+          "Nomor WhatsApp atau Password salah, atau toko belum tersedia di database. Klik 'Daftar Toko Baru' untuk mendaftar.",
+        );
       }
     }
   };
@@ -256,9 +268,14 @@ export default function LoginForm({ onLogin, darkMode }) {
 
         <button
           type="submit"
-          className="w-full bg-emerald-600 hover:bg-emerald-500 active:scale-98 text-white font-extrabold py-3 rounded-xl transition-all text-xs tracking-wide uppercase mt-1 shadow-md shadow-emerald-600/20"
+          disabled={isSubmitting}
+          className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:cursor-wait disabled:opacity-60 active:scale-98 text-white font-extrabold py-3 rounded-xl transition-all text-xs tracking-wide uppercase mt-1 shadow-md shadow-emerald-600/20"
         >
-          {isRegister ? 'Selesaikan Pendaftaran' : 'Masuk Dashboard UMKM'}
+          {isSubmitting
+            ? 'Mendaftarkan...'
+            : isRegister
+              ? 'Selesaikan Pendaftaran'
+              : 'Masuk Dashboard UMKM'}
         </button>
       </form>
 

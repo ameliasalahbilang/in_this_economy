@@ -12,7 +12,7 @@ export default defineConfig({
       includeAssets: ["pwa-192.svg", "pwa-512.svg"],
       manifest: {
         name: "In This Economy",
-        short_name: "ITE Deals",
+        short_name: "In This Economy",
         description: "Promo hemat dan UMKM terdekat untuk mahasiswa.",
         lang: "id",
         theme_color: "#059669",

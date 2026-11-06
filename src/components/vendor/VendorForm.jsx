@@ -13,6 +13,7 @@ export default function VendorForm({
   const isEditMode = Boolean(initialData);
 
   const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
   const [hasPromo, setHasPromo] = useState(false);
   const [discountPrice, setDiscountPrice] = useState("");
@@ -21,6 +22,8 @@ export default function VendorForm({
   const [isLateNight, setIsLateNight] = useState(false);
   const [imagePreview, setImagePreview] = useState("");
   const [priceError, setPriceError] = useState("");
+  const [submitError, setSubmitError] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
   const formatRupiah = (value) => {
     const rawNumber = String(value).replace(/[^0-9]/g, "");
@@ -62,6 +65,7 @@ export default function VendorForm({
   useEffect(() => {
     if (initialData) {
       setName(initialData.name || "");
+      setDescription(initialData.description || "");
       setPrice(
         initialData.originalPrice
           ? formatRupiah(String(initialData.originalPrice))
@@ -96,7 +100,7 @@ export default function VendorForm({
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const normalNumber = parseNumber(price);
     const promoNumber = parseNumber(discountPrice);
@@ -111,14 +115,14 @@ export default function VendorForm({
       hasPromo && discountPrice ? parseRawNumber(discountPrice) : originalVal;
 
     const productPayload = {
-      id:
-        initialData?.id ||
-        `prod-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      ...(initialData?.id ? { id: initialData.id } : {}),
       name,
+      description,
       storeName:
         currentUser?.storeName || currentUser?.name || "Wedangan Bu Amel",
       ownerName:
         currentUser?.ownerName || currentUser?.owner || "Amelia Salsabila",
+      merchantId: currentUser?.id,
       whatsapp: currentUser?.phone || currentUser?.whatsapp || "081234567890",
       gmapsUrl: currentUser?.gmapsUrl || "https://maps.google.com",
       lat: userLocation?.lat || UNS_COORDINATES.lat,
@@ -135,12 +139,21 @@ export default function VendorForm({
         initialData?.isActive !== undefined ? initialData.isActive : true,
     };
 
-    if (isEditMode) {
-      onUpdateProduct(productPayload);
-    } else {
-      onAddProduct(productPayload);
+    setIsSaving(true);
+    setSubmitError("");
+    try {
+      if (isEditMode) {
+        await onUpdateProduct(productPayload);
+      } else {
+        await onAddProduct(productPayload);
+      }
+      onClose();
+    } catch (error) {
+      console.error("Gagal menyimpan produk:", error);
+      setSubmitError(error.message || "Gagal menyimpan produk. Silakan coba lagi.");
+    } finally {
+      setIsSaving(false);
     }
-    onClose();
   };
 
   return (
@@ -175,6 +188,11 @@ export default function VendorForm({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {submitError && (
+            <p role="alert" className="text-xs font-bold text-rose-500">
+              {submitError}
+            </p>
+          )}
           {/* UPLOAD FOTO (REQUIRED HANYA SAAT TAMBAH BARU) */}
           <div>
             <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1">
@@ -218,6 +236,23 @@ export default function VendorForm({
                   : "bg-slate-50 border-slate-200 text-slate-800"
               }`}
               required
+            />
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1">
+              Deskripsi (Opsional)
+            </label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Informasi singkat tentang produk"
+              rows={2}
+              className={`w-full px-3.5 py-2 border rounded-xl font-bold text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
+                darkMode
+                  ? "bg-slate-800 border-slate-700 text-slate-100"
+                  : "bg-slate-50 border-slate-200 text-slate-800"
+              }`}
             />
           </div>
 
@@ -374,9 +409,14 @@ export default function VendorForm({
           {/* SUBMIT BUTTON */}
           <button
             type="submit"
-            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold py-3 rounded-xl transition-all text-xs tracking-wide uppercase mt-2 shadow-md shadow-emerald-600/20"
+            disabled={isSaving}
+            className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:cursor-wait disabled:opacity-60 text-white font-extrabold py-3 rounded-xl transition-all text-xs tracking-wide uppercase mt-2 shadow-md shadow-emerald-600/20"
           >
-            {isEditMode ? "Simpan Perubahan" : "Terbitkan ke Katalog"}
+            {isSaving
+              ? "Menyimpan..."
+              : isEditMode
+                ? "Simpan Perubahan"
+                : "Terbitkan ke Katalog"}
           </button>
         </form>
       </div>
