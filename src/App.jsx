@@ -3,6 +3,7 @@ import { Download } from "lucide-react";
 import BudgetForm from "./components/budget/BudgetForm";
 import FoodCard from "./components/food/FoodCard";
 import SavedDeals from "./components/food/SavedDeals";
+import useHideOnScroll from "./hooks/useHideOnScroll";
 import VendorDashboard from "./components/vendor/VendorDashboard";
 import AdminDashboard from "./components/admin/AdminDashboard";
 import VendorForm from "./components/vendor/VendorForm";
@@ -65,6 +66,10 @@ const toSupabaseProduct = (product) => ({
 
 export default function App() {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [isAppInstalled, setIsAppInstalled] = useState(
+    () => window.matchMedia("(display-mode: standalone)").matches,
+  );
+  const isHeaderVisible = useHideOnScroll();
   const [darkMode, setDarkMode] = useState(() => {
     return localStorage.getItem("theme") === "dark";
   });
@@ -347,15 +352,24 @@ export default function App() {
   const [activeCategoryTab, setActiveCategoryTab] = useState("makan");
 
   useEffect(() => {
+    const standaloneQuery = window.matchMedia("(display-mode: standalone)");
+    const handleDisplayModeChange = (event) => {
+      setIsAppInstalled(event.matches);
+    };
     const handleBeforeInstallPrompt = (event) => {
       event.preventDefault();
       setDeferredPrompt(event);
     };
-    const handleAppInstalled = () => setDeferredPrompt(null);
+    const handleAppInstalled = () => {
+      setDeferredPrompt(null);
+      setIsAppInstalled(true);
+    };
 
+    standaloneQuery.addEventListener("change", handleDisplayModeChange);
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
     window.addEventListener("appinstalled", handleAppInstalled);
     return () => {
+      standaloneQuery.removeEventListener("change", handleDisplayModeChange);
       window.removeEventListener(
         "beforeinstallprompt",
         handleBeforeInstallPrompt,
@@ -527,7 +541,9 @@ export default function App() {
       } ${darkMode ? "dark bg-slate-950 text-slate-100" : "bg-slate-50 text-slate-800"}`}
     >
       <header
-        className={`sticky top-0 z-30 py-3 px-4 md:px-6 border-b backdrop-blur-md transition-colors ${
+        className={`sticky top-0 z-30 py-3 px-4 md:px-6 border-b backdrop-blur-md transition-transform duration-300 ${
+          isHeaderVisible ? "translate-y-0" : "-translate-y-full"
+        } ${
           darkMode
             ? "bg-slate-950/80 border-slate-800 text-slate-100"
             : "bg-white/80 border-slate-200 text-slate-800"
@@ -561,17 +577,19 @@ export default function App() {
 
           {/* BAGIAN BAWAH (HP): Tombol Action */}
           <div className="flex items-center justify-start sm:justify-end gap-2 flex-wrap w-full sm:w-auto pt-1 sm:pt-0">
-            <button
-              type="button"
-              onClick={handleInstallClick}
-              aria-label="Install App"
-              className={`inline-flex items-center gap-1.5 rounded-xl border bg-emerald-500/10 px-3 py-1.5 text-xs font-extrabold text-emerald-600 transition-all hover:bg-emerald-500/20 active:scale-95 dark:text-emerald-400 ${
-                darkMode ? "border-emerald-500/20" : "border-emerald-200"
-              }`}
-            >
-              <Download className="h-3.5 w-3.5" aria-hidden="true" />
-              <span>Install App</span>
-            </button>
+            {!isAppInstalled && (
+              <button
+                type="button"
+                onClick={handleInstallClick}
+                aria-label="Install App"
+                className={`inline-flex items-center gap-1.5 rounded-xl border bg-emerald-500/10 px-3 py-1.5 text-xs font-extrabold text-emerald-600 transition-all hover:bg-emerald-500/20 active:scale-95 dark:text-emerald-400 ${
+                  darkMode ? "border-emerald-500/20" : "border-emerald-200"
+                }`}
+              >
+                <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>Install App</span>
+              </button>
+            )}
 
             <button
               onClick={() => setDarkMode(!darkMode)}
@@ -744,9 +762,6 @@ export default function App() {
                 <>
                   <div className="flex justify-between items-center mb-3 px-1 flex-wrap gap-2">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-xs font-extrabold text-slate-500 dark:text-slate-400 mr-1">
-                        Filter Kategori:
-                      </span>
                       {[
                         {
                           id: "makan",
