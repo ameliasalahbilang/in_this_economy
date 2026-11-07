@@ -10,23 +10,6 @@ export default function AdminDashboard({
 }) {
   const [activeTab, setActiveTab] = useState("merchants");
   const [productFilter, setProductFilter] = useState("all");
-  useEffect(() => {
-    async function fetchProductsWithMerchant() {
-      const { data, error } = await supabase.from("products").select(`
-        *,
-        merchants (
-          id,
-          store_name
-        )
-      `);
-
-      if (!error && data) {
-        setProductsList(data);
-      }
-    }
-
-    fetchProductsWithMerchant();
-  }, []);
 
   // State Pagination (5 Item Per Halaman)
   const [merchantPage, setMerchantPage] = useState(1);
