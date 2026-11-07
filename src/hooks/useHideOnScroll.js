@@ -18,9 +18,7 @@ export default function useHideOnScroll() {
         accumulatedDelta = 0;
       } else if (nextDirection !== 0) {
         accumulatedDelta =
-          nextDirection === scrollDirection
-            ? accumulatedDelta + delta
-            : delta;
+          nextDirection === scrollDirection ? accumulatedDelta + delta : delta;
         scrollDirection = nextDirection;
 
         if (Math.abs(accumulatedDelta) >= 8) {
