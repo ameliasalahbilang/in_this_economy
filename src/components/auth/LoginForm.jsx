@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
+import { isSupabaseConfigured, supabase } from '../../supabase';
 
 export default function LoginForm({ onLogin, onRegister, merchants = [], darkMode }) {
   const [isRegister, setIsRegister] = useState(false);
   const [storeName, setStoreName] = useState('');
   const [ownerName, setOwnerName] = useState('');
   const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [gmapsUrl, setGmapsUrl] = useState('');
@@ -31,7 +33,7 @@ export default function LoginForm({ onLogin, onRegister, merchants = [], darkMod
     }
 
     if (isRegister) {
-      if (!storeName || !ownerName || !phone || !password || !gmapsUrl) {
+      if (!storeName || !ownerName || !phone || !email || !password || !gmapsUrl) {
         setErrorMessage("Mohon lengkapi seluruh data pendaftaran toko.");
         return;
       }
@@ -44,19 +46,40 @@ export default function LoginForm({ onLogin, onRegister, merchants = [], darkMod
 
       setIsSubmitting(true);
       try {
+        if (!isSupabaseConfigured || !supabase) {
+          throw new Error('Supabase belum dikonfigurasi.');
+        }
+
+        const normalizedEmail = email.trim().toLowerCase();
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+          email: normalizedEmail,
+          password,
+        });
+
+        if (authError) {
+          throw new Error(`Gagal membuat akun: ${authError.message}`);
+        }
+        if (!authData?.user) {
+          throw new Error('Supabase tidak mengembalikan data pengguna.');
+        }
+
         const savedMerchant = await onRegister({
+          userId: authData.user.id,
           storeName,
           ownerName,
           phone,
           gmapsUrl,
           category,
         });
-        const credentials = JSON.parse(localStorage.getItem('app_merchant_credentials') || '{}');
-        localStorage.setItem(
-          'app_merchant_credentials',
-          JSON.stringify({ ...credentials, [phone]: password }),
-        );
-        onLogin({ ...savedMerchant, role: 'umkm' });
+
+        if (authData.session) {
+          onLogin({ ...savedMerchant, role: 'umkm', email: normalizedEmail });
+        } else {
+          setIsRegister(false);
+          setErrorMessage(
+            'Pendaftaran berhasil. Silakan konfirmasi email jika diminta, lalu masuk dengan email dan password.',
+          );
+        }
       } catch (error) {
         console.error('Gagal mendaftarkan mitra:', error);
         setErrorMessage(error.message || 'Pendaftaran gagal. Silakan coba lagi.');
@@ -64,30 +87,74 @@ export default function LoginForm({ onLogin, onRegister, merchants = [], darkMod
         setIsSubmitting(false);
       }
     } else {
-      if (!phone || !password) {
-        setErrorMessage("Masukkan Nomor WhatsApp dan Password toko kamu.");
+      if (!email || !password) {
+        setErrorMessage('Masukkan email dan password akun toko.');
         return;
       }
 
-      const merchant = merchants.find((item) => item.phone === phone);
-      let credentials = {};
+      if (!isSupabaseConfigured || !supabase) {
+        setErrorMessage('Supabase belum dikonfigurasi.');
+        return;
+      }
+
+      setIsSubmitting(true);
       try {
-        credentials = JSON.parse(
-          localStorage.getItem('app_merchant_credentials') || '{}',
-        );
-      } catch (error) {
-        console.error('Gagal membaca kredensial lokal:', error);
-        setErrorMessage('Data login lokal rusak. Silakan daftar kembali.');
-        return;
-      }
-      const storedPassword = credentials[phone];
+        const normalizedEmail = email.trim().toLowerCase();
+        const { data: authData, error: authError } =
+          await supabase.auth.signInWithPassword({
+            email: normalizedEmail,
+            password,
+          });
 
-      if (merchant && storedPassword === password) {
-        onLogin({ ...merchant, role: 'umkm' });
-      } else {
-        setErrorMessage(
-          "Nomor WhatsApp atau Password salah, atau toko belum tersedia di database. Klik 'Daftar Toko Baru' untuk mendaftar.",
-        );
+        if (authError) {
+          const message = authError.message.toLowerCase();
+          const isInvalidCredentials =
+            message.includes('invalid login credentials') ||
+            message.includes('email not confirmed');
+          throw new Error(
+            isInvalidCredentials
+              ? 'Email atau password salah. Periksa kembali kredensial atau konfirmasi email Anda.'
+              : `Gagal masuk: ${authError.message}`,
+          );
+        }
+
+        const { data: merchantRow, error: merchantError } = await supabase
+          .from('merchants')
+          .select('*')
+          .eq('user_id', authData.user.id)
+          .maybeSingle();
+
+        if (merchantError) {
+          throw new Error(`Gagal memuat data merchant: ${merchantError.message}`);
+        }
+        if (!merchantRow) {
+          const { error: signOutError } = await supabase.auth.signOut();
+          if (signOutError) {
+            throw new Error(`Akun tidak memiliki data merchant: ${signOutError.message}`);
+          }
+          throw new Error('Akun ini belum terhubung dengan data merchant.');
+        }
+
+        onLogin({
+          id: merchantRow.id,
+          name: merchantRow.store_name,
+          storeName: merchantRow.store_name,
+          owner: merchantRow.owner_name || '',
+          ownerName: merchantRow.owner_name || '',
+          phone: merchantRow.phone || '',
+          gmapsUrl: merchantRow.gmaps_url || '',
+          category: merchantRow.category || 'makan',
+          isActive: merchantRow.is_active !== false,
+          lat: merchantRow.lat == null ? undefined : Number(merchantRow.lat),
+          lng: merchantRow.lng == null ? undefined : Number(merchantRow.lng),
+          role: 'umkm',
+          email: normalizedEmail,
+        });
+      } catch (error) {
+        console.error('Gagal masuk sebagai mitra:', error);
+        setErrorMessage(error.message || 'Login gagal. Silakan coba lagi.');
+      } finally {
+        setIsSubmitting(false);
       }
     }
   };
@@ -151,7 +218,6 @@ export default function LoginForm({ onLogin, onRegister, merchants = [], darkMod
                 className={`w-full px-3.5 py-2 border rounded-xl font-bold text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
                   darkMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-200 text-slate-800'
                 }`}
-                required
               />
             </div>
 
@@ -173,6 +239,25 @@ export default function LoginForm({ onLogin, onRegister, merchants = [], darkMod
           </>
         )}
 
+        {!isRegister && (
+          <div>
+            <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1">
+              Email Akun Toko
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="nama@email.com"
+              autoComplete="email"
+              className={`w-full px-3.5 py-2 border rounded-xl font-bold text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
+                darkMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-200 text-slate-800'
+              }`}
+              required
+            />
+          </div>
+        )}
+
         {/* Input No. WhatsApp */}
         <div>
           <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1">
@@ -186,7 +271,7 @@ export default function LoginForm({ onLogin, onRegister, merchants = [], darkMod
             className={`w-full px-3.5 py-2 border rounded-xl font-bold text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
               darkMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-200 text-slate-800'
             }`}
-            required
+            required={isRegister}
           />
         </div>
 
@@ -201,6 +286,8 @@ export default function LoginForm({ onLogin, onRegister, merchants = [], darkMod
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
+              autoComplete={isRegister ? 'new-password' : 'current-password'}
+              minLength={isRegister ? 6 : undefined}
               className={`w-full pl-3.5 pr-9 py-2 border rounded-xl font-bold text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
                 darkMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-200 text-slate-800'
               }`}
@@ -230,6 +317,22 @@ export default function LoginForm({ onLogin, onRegister, merchants = [], darkMod
         {/* Field Tambahan Registrasi Baru */}
         {isRegister && (
           <>
+            <div>
+              <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1">
+                Email Akun Toko
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="nama@email.com"
+                autoComplete="email"
+                className={`w-full px-3.5 py-2 border rounded-xl font-bold text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
+                  darkMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-200 text-slate-800'
+                }`}
+                required
+              />
+            </div>
             <div>
               <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1">
                 Link Google Maps Lokasi Toko
@@ -286,6 +389,7 @@ export default function LoginForm({ onLogin, onRegister, merchants = [], darkMod
             setIsRegister(!isRegister);
             setErrorMessage('');
             setPhone('');
+            setEmail('');
             setPassword('');
           }}
           className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline"

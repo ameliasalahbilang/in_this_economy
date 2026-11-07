@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { UNS_COORDINATES } from "../../utils/location";
+import { extractGoogleMapsCoordinates } from "../../utils/location";
 
 export default function VendorForm({
   onAddProduct,
@@ -7,7 +7,6 @@ export default function VendorForm({
   onClose,
   darkMode,
   currentUser,
-  userLocation,
   initialData,
 }) {
   const isEditMode = Boolean(initialData);
@@ -102,6 +101,7 @@ export default function VendorForm({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setSubmitError("");
     const normalNumber = parseNumber(price);
     const promoNumber = parseNumber(discountPrice);
 
@@ -125,8 +125,14 @@ export default function VendorForm({
       merchantId: currentUser?.id,
       whatsapp: currentUser?.phone || currentUser?.whatsapp || "081234567890",
       gmapsUrl: currentUser?.gmapsUrl || "https://maps.google.com",
-      lat: userLocation?.lat || UNS_COORDINATES.lat,
-      lng: userLocation?.lng || UNS_COORDINATES.lng,
+      lat:
+        currentUser?.lat ??
+        extractGoogleMapsCoordinates(currentUser?.gmapsUrl)?.lat ??
+        null,
+      lng:
+        currentUser?.lng ??
+        extractGoogleMapsCoordinates(currentUser?.gmapsUrl)?.lng ??
+        null,
       category,
       originalPrice: originalVal,
       discountPrice: discountVal,
@@ -140,7 +146,6 @@ export default function VendorForm({
     };
 
     setIsSaving(true);
-    setSubmitError("");
     try {
       if (isEditMode) {
         await onUpdateProduct(productPayload);
@@ -150,7 +155,9 @@ export default function VendorForm({
       onClose();
     } catch (error) {
       console.error("Gagal menyimpan produk:", error);
-      setSubmitError(error.message || "Gagal menyimpan produk. Silakan coba lagi.");
+      setSubmitError(
+        error.message || "Gagal menyimpan produk. Silakan coba lagi.",
+      );
     } finally {
       setIsSaving(false);
     }

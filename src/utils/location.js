@@ -1,5 +1,17 @@
 export const UNS_COORDINATES = { lat: -7.558, lng: 110.856 };
 
+export const extractGoogleMapsCoordinates = (gmapsUrl) => {
+  const match = String(gmapsUrl || "").match(
+    /@(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/,
+  );
+
+  if (!match) return null;
+
+  const lat = Number(match[1]);
+  const lng = Number(match[2]);
+  return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+};
+
 // 1. Rumus Haversine untuk menghitung jarak antara 2 koordinat (Lat, Lng) dalam KM
 export const calculateDistanceInKm = (lat1, lon1, lat2, lon2) => {
   if (![lat1, lon1, lat2, lon2].every(Number.isFinite)) return null;

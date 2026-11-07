@@ -1,5 +1,6 @@
 create table if not exists public.merchants (
   id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade,
   store_name text not null,
   owner_name text not null,
   phone text not null,
@@ -9,6 +10,9 @@ create table if not exists public.merchants (
   lat double precision,
   lng double precision
 );
+
+alter table public.merchants
+  add column if not exists user_id uuid references auth.users(id) on delete cascade;
 
 create table if not exists public.products (
   id uuid primary key default gen_random_uuid(),

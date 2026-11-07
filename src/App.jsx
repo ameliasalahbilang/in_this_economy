@@ -12,12 +12,14 @@ import { mockFoods as initialFoods } from "./data/mockData";
 import { isSupabaseConfigured, supabase } from "./supabase";
 import {
   calculateDistanceInKm,
+  extractGoogleMapsCoordinates,
   getUserCoordinates,
   UNS_COORDINATES,
 } from "./utils/location";
 
 const mapSupabaseMerchant = (row) => ({
   id: row.id,
+  userId: row.user_id,
   name: row.store_name,
   storeName: row.store_name,
   owner: row.owner_name || "",
@@ -44,12 +46,6 @@ const mapSupabaseProduct = (row) => ({
   image: row.image || "",
   isActive: row.is_active !== false,
 });
-
-const getCoordinatesFromMapUrl = (mapUrl) => {
-  const match = mapUrl.match(/(-?\d+(?:\.\d+)?)[,/]\s*(-?\d+(?:\.\d+)?)/);
-  if (!match) return {};
-  return { lat: Number(match[1]), lng: Number(match[2]) };
-};
 
 const toSupabaseProduct = (product) => ({
   merchant_id: product.merchantId,
@@ -185,18 +181,19 @@ export default function App() {
 
   const handleRegisterMerchant = async (merchant) => {
     if (!supabase) throw new Error("Supabase belum dikonfigurasi.");
-    const coordinates = getCoordinatesFromMapUrl(merchant.gmapsUrl);
+    const coordinates = extractGoogleMapsCoordinates(merchant.gmapsUrl);
     const { data, error } = await supabase
       .from("merchants")
       .insert({
+        user_id: merchant.userId,
         store_name: merchant.storeName,
         owner_name: merchant.ownerName,
         phone: merchant.phone,
         gmaps_url: merchant.gmapsUrl,
         category: merchant.category,
         is_active: true,
-        lat: merchant.lat ?? coordinates.lat ?? null,
-        lng: merchant.lng ?? coordinates.lng ?? null,
+        lat: coordinates?.lat ?? null,
+        lng: coordinates?.lng ?? null,
       })
       .select()
       .single();
@@ -250,12 +247,7 @@ export default function App() {
 
     const merchant = merchants.find((item) => item.id === food.merchantId);
     const mapUrl = food.gmapsUrl || merchant?.gmapsUrl || "";
-    const match = mapUrl.match(/(-?\d+(?:\.\d+)?)[,/]\s*(-?\d+(?:\.\d+)?)/);
-    if (!match) return null;
-
-    const lat = Number(match[1]);
-    const lng = Number(match[2]);
-    return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+    return extractGoogleMapsCoordinates(mapUrl);
   };
 
   const enrichedProducts = products.map((product) => {
@@ -334,6 +326,77 @@ export default function App() {
   const [userLocation, setUserLocation] = useState(UNS_COORDINATES);
   const [isLiveGPS, setIsLiveGPS] = useState(false);
   const [foods, setFoods] = useState(initialFoods);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !supabase) return undefined;
+
+    let isMounted = true;
+    const restoreMerchantSession = async (session) => {
+      if (!session?.user) {
+        if (isMounted) setCurrentUser(null);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("merchants")
+        .select("*")
+        .eq("user_id", session.user.id)
+        .maybeSingle();
+
+      if (!isMounted) return;
+      if (error) {
+        console.error("Gagal memulihkan sesi merchant:", error);
+        setProductError(`Gagal memuat sesi merchant: ${error.message}`);
+        return;
+      }
+      if (!data) {
+        setCurrentUser(null);
+        return;
+      }
+
+      setCurrentUser({
+        ...mapSupabaseMerchant(data),
+        email: session.user.email || "",
+      });
+    };
+
+    supabase.auth
+      .getSession()
+      .then(({ data, error }) => {
+        if (error) {
+          console.error("Gagal memeriksa sesi Supabase:", error);
+          if (isMounted) {
+            setProductError(`Gagal memeriksa sesi login: ${error.message}`);
+          }
+          return;
+        }
+        return restoreMerchantSession(data.session);
+      })
+      .catch((error) => {
+        console.error("Gagal memeriksa sesi Supabase:", error);
+        if (isMounted) {
+          setProductError("Terjadi kesalahan saat memulihkan sesi login.");
+        }
+      });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) {
+        if (isMounted) setCurrentUser(null);
+        return;
+      }
+
+      queueMicrotask(() => {
+        void restoreMerchantSession(session);
+      });
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   const [calculation, setCalculation] = useState(() => {
     const savedCalc = localStorage.getItem("active_budget_session");
@@ -473,10 +536,27 @@ export default function App() {
     }
   };
 
-  const handleConfirmLogout = () => {
+  const handleLogout = async () => {
+    if (currentUser?.role !== "admin" && supabase) {
+      try {
+        const { error } = await supabase.auth.signOut();
+        if (error) throw error;
+      } catch (error) {
+        console.error("Gagal mengakhiri sesi Supabase:", error);
+        setProductError(`Gagal keluar: ${error.message}`);
+        return false;
+      }
+    }
+
     setCurrentUser(null);
-    setActiveTab("feed");
-    setShowLogoutConfirm(false);
+    return true;
+  };
+
+  const handleConfirmLogout = async () => {
+    if (await handleLogout()) {
+      setActiveTab("feed");
+      setShowLogoutConfirm(false);
+    }
   };
 
   const confirmClaim = (type) => {
@@ -683,7 +763,7 @@ export default function App() {
             onDeleteProduct={handleDeleteProduct}
             onToggleLateNight={handleToggleLateNight}
             darkMode={darkMode}
-            onLogout={() => setCurrentUser(null)}
+            onLogout={handleLogout}
           />
         ) : currentUser?.role === "umkm" ? (
           <VendorDashboard
@@ -1067,7 +1147,7 @@ export default function App() {
       {showVendorModal && (
         <VendorForm
           darkMode={darkMode}
-          userLocation={userLocation}
+          currentUser={currentUser}
           onAddProduct={handleAddProduct}
           onClose={() => setShowVendorModal(false)}
         />
