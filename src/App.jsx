@@ -616,7 +616,7 @@ export default function App() {
     <div
       className={`transition-colors duration-300 ${
         currentUser?.role === "admin"
-          ? "min-h-screen md:h-screen md:overflow-hidden flex flex-col"
+          ? "min-h-screen flex flex-col"
           : "min-h-screen pb-12"
       } ${darkMode ? "dark bg-slate-950 text-slate-100" : "bg-slate-50 text-slate-800"}`}
     >

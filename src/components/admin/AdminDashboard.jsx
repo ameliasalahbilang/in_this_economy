@@ -91,7 +91,7 @@ export default function AdminDashboard({
   const totalMidnightCount = foods.filter(f => f.isLateNight).length;
 
   return (
-    <div className={`w-full min-h-screen md:h-full overflow-y-auto md:overflow-hidden flex flex-col md:flex-row transition-colors ${
+    <div className={`w-full min-h-screen max-w-full flex flex-col md:flex-row transition-colors ${
       darkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-100/70 text-slate-800'
     }`}>
       
@@ -189,7 +189,7 @@ export default function AdminDashboard({
       </aside>
 
       {/* MAIN CONTENT AREA */}
-      <main className="flex-1 w-full p-4 md:p-8 space-y-6 overflow-y-auto scrollbar-thin">
+      <main className="min-w-0 max-w-full flex-1 w-full p-4 md:p-8 space-y-6">
         
         {/* SUMMARY METRIC CARDS */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
@@ -269,8 +269,8 @@ export default function AdminDashboard({
             </div>
 
             {merchants.length > 0 ? (
-              <div className={`overflow-hidden rounded-3xl border shadow-sm ${darkMode ? 'border-slate-800 bg-slate-900/60' : 'border-slate-200/90 bg-white'}`}>
-                <div className="overflow-x-auto scrollbar-thin">
+              <div className={`max-w-full overflow-hidden rounded-3xl border shadow-sm ${darkMode ? 'border-slate-800 bg-slate-900/60' : 'border-slate-200/90 bg-white'}`}>
+                <div className="max-w-full overflow-x-auto md:overflow-y-auto md:max-h-[calc(100vh-200px)] scrollbar-thin">
                   <table className="w-full text-left text-xs min-w-[700px]">
                     <thead className={`font-black uppercase text-[10px] tracking-wider border-b ${darkMode ? 'bg-slate-900/80 border-slate-800 text-slate-400' : 'bg-slate-50/90 border-slate-200 text-slate-700'}`}>
                       <tr>
@@ -432,8 +432,8 @@ export default function AdminDashboard({
             </div>
 
             {filteredProducts.length > 0 ? (
-              <div className={`overflow-hidden rounded-3xl border shadow-sm ${darkMode ? 'border-slate-800 bg-slate-900/60' : 'border-slate-200/90 bg-white'}`}>
-                <div className="overflow-x-auto scrollbar-thin">
+              <div className={`max-w-full overflow-hidden rounded-3xl border shadow-sm ${darkMode ? 'border-slate-800 bg-slate-900/60' : 'border-slate-200/90 bg-white'}`}>
+                <div className="max-w-full overflow-x-auto md:overflow-y-auto md:max-h-[calc(100vh-200px)] scrollbar-thin">
                   <table className="w-full text-left text-xs min-w-[780px]">
                     <thead className={`font-black uppercase text-[10px] tracking-wider border-b ${darkMode ? 'bg-slate-900/80 border-slate-800 text-slate-400' : 'bg-slate-50/90 border-slate-200 text-slate-700'}`}>
                       <tr>
