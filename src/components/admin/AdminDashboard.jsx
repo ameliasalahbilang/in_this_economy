@@ -649,12 +649,19 @@ export default function AdminDashboard({
                                 {item.category}
                               </span>
                             </td>
-                            <td className="p-4 font-extrabold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
-                              {item.merchants?.store_name ||
-                                item.store_name ||
-                                item.storeName ||
-                                "-"}
-                            </td>
+<td className="p-4 font-extrabold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
+  {
+    // 1. Jika ter-JOIN dari Supabase (merchants.store_name)
+    item.merchants?.store_name ||
+    // 2. Jika ada di properti bawaan
+    item.store_name ||
+    item.storeName ||
+    // 3. Pencocokan manual berdasarkan vendor_id ke daftar merchants
+    merchants.find((m) => m.id === item.vendor_id)?.store_name ||
+    merchants.find((m) => m.id === item.vendor_id)?.storeName ||
+    "-"
+  }
+</td>
 
                             <td className="p-4">
                               {item.isLateNight ? (
