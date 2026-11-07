@@ -6,7 +6,7 @@ export const generateId = () => {
 export const mockMerchants = [
   {
     id: "m-1",
-    storeName: "Wedangan Bu Amel",
+    store_name: "Wedangan Bu Amel",
     ownerName: "Amelia Salsabila",
     phone: "081234567890",
     gmapsUrl: "https://maps.google.com/?q=-7.558,110.856",
@@ -17,7 +17,7 @@ export const mockMerchants = [
   },
   {
     id: "m-2",
-    storeName: "Salsa Copy & Print",
+    store_name: "Salsa Copy & Print",
     ownerName: "Salsabila",
     phone: "089876543210",
     gmapsUrl: "https://maps.google.com/?q=-7.559,110.857",
@@ -28,6 +28,7 @@ export const mockMerchants = [
   },
   {
     id: "m-3",
+    store_name: "Soto Sapi Pak Min Boyolali",
     storeName: "Soto Sapi Pak Min Boyolali",
     ownerName: "Pak Min",
     phone: "085712345678",
@@ -44,6 +45,7 @@ export const mockFoods = [
   {
     id: "prod-101",
     name: "Nasi Sayur + Tahu Tempe",
+    store_name: "Wedangan Bu Amel",
     storeName: "Wedangan Bu Amel",
     category: "makan",
     originalPrice: 12000,
@@ -56,7 +58,7 @@ export const mockFoods = [
   {
     id: "prod-102",
     name: "Es Teh Solo Jumbo",
-    storeName: "Wedangan Bu Amel",
+    store_name: "Wedangan Bu Amel",
     category: "makan",
     originalPrice: 5000,
     discountPrice: 3000,
@@ -68,7 +70,7 @@ export const mockFoods = [
   {
     id: "prod-103",
     name: "Paket Print Skripsi 50 Hlm",
-    storeName: "Arkana Copy & Print",
+    store_name: "Arkana Copy & Print",
     category: "jasa",
     originalPrice: 25000,
     discountPrice: 18000,
@@ -80,7 +82,7 @@ export const mockFoods = [
   {
     id: "prod-104",
     name: "Soto Sapi Boyolali Spesial",
-    storeName: "Soto Sapi Pak Min Boyolali",
+    store_name: "Soto Sapi Pak Min Boyolali",
     category: "makan",
     originalPrice: 15000,
     discountPrice: 12000,
