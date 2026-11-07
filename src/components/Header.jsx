@@ -46,7 +46,7 @@ export default function Header({
           </div>
           <p className="mt-0.5 text-[11px] font-medium text-slate-400">
             {currentUser
-              ? `Mode Dashboard ${currentUser.role === "admin" ? "Super Admin" : "Mitra"} (${currentUser.name})`
+              ? `Mode Dashboard ${currentUser.role === "admin" ? "Super Admin" : "Mitra"} (${currentUser.store_name || ""})`
               : "Alokasi Budget & Smart Partner Platform"}
           </p>
         </div>

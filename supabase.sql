@@ -16,15 +16,14 @@ alter table public.merchants
 
 create table if not exists public.products (
   id uuid primary key default gen_random_uuid(),
-  merchant_id uuid not null references public.merchants(id) on delete cascade,
-  store_name text not null,
+  vendor_id uuid not null references public.merchants(id) on delete cascade,
   name text not null,
   category text,
-  original_price numeric not null,
-  discount_price numeric not null,
+  price numeric not null,
+  image_url text,
+  maps_url text,
   is_late_night boolean not null default false,
   promo_tag text,
-  image text,
   is_active boolean not null default true
 );
 

@@ -18,17 +18,12 @@ export default function VendorDashboard({
   const [confirmTarget, setConfirmTarget] = useState(null);
   const [toastMessage, setToastMessage] = useState("");
 
-  const currentStoreName = currentUser?.storeName || currentUser?.name || "";
-
   const merchantProducts = (products || []).filter(
-    (product) => product.merchantId
-      ? product.merchantId === currentUser?.id
-      : product.storeName?.toLowerCase() === currentStoreName?.toLowerCase(),
+    (product) => product.vendor_id === currentUser?.id,
   );
 
-  const isPromoItem = (p) =>
-    p.discountPrice && p.discountPrice < p.originalPrice;
-  const isNightItem = (p) => Boolean(p.isLateNight);
+  const isPromoItem = (product) => Boolean(product.promo_tag);
+  const isNightItem = (product) => Boolean(product.is_late_night);
   const isRegularItem = (p) => !isPromoItem(p) && !isNightItem(p);
 
   const counts = {
@@ -59,7 +54,7 @@ export default function VendorDashboard({
     if (!confirmTarget) return;
 
     const targetId = confirmTarget.id;
-    const isCurrentlyActive = confirmTarget.isActive !== false;
+    const isCurrentlyActive = confirmTarget.is_active !== false;
 
     try {
       await onToggleProductStatus(targetId);
@@ -78,7 +73,7 @@ export default function VendorDashboard({
     setToastMessage(message);
   };
 
-  const storeGmapsUrl = currentUser?.gmapsUrl || "https://maps.google.com";
+  const storeGmapsUrl = currentUser?.gmaps_url || "https://maps.google.com";
 
   return (
     <div
@@ -118,9 +113,7 @@ export default function VendorDashboard({
 
               <div className="flex items-center gap-3">
                 <h1 className="text-2xl md:text-3xl font-black tracking-tight leading-none">
-                  {currentUser?.storeName ||
-                    currentUser?.name ||
-                    "Wedangan Bu Amel"}
+                  {currentUser?.store_name || "Toko"}
                 </h1>
               </div>
 
@@ -146,9 +139,7 @@ export default function VendorDashboard({
                     <strong
                       className={darkMode ? "text-slate-100" : "text-slate-900"}
                     >
-                      {currentUser?.ownerName ||
-                        currentUser?.owner ||
-                        "Amelia Salsabila"}
+                      {currentUser?.owner_name || "-"}
                     </strong>
                   </span>
                 </div>
@@ -168,11 +159,7 @@ export default function VendorDashboard({
                   >
                     <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
                   </svg>
-                  <span>
-                    {currentUser?.phone ||
-                      currentUser?.whatsapp ||
-                      "081234567890"}
-                  </span>
+                  <span>{currentUser?.phone || "-"}</span>
                 </div>
               </div>
             </div>
@@ -413,7 +400,7 @@ export default function VendorDashboard({
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {filteredProducts.map((product) => {
-                const isActive = product.isActive !== false;
+                const isActive = product.is_active !== false;
 
                 return (
                   <div
@@ -430,7 +417,7 @@ export default function VendorDashboard({
                   >
                     <div className="relative flex-shrink-0">
                       <img
-                        src={product.image}
+                        src={product.image_url || ""}
                         alt={product.name}
                         className="w-24 h-24 object-cover rounded-2xl"
                       />
@@ -447,7 +434,7 @@ export default function VendorDashboard({
                           <span className="text-[9px] font-black uppercase text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md">
                             {product.category}
                           </span>
-                          {product.isLateNight && (
+                          {product.is_late_night && (
                             <span className="text-[9px] font-black uppercase text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 rounded-md flex items-center gap-1">
                               <svg
                                 className="w-2.5 h-2.5 stroke-current"
@@ -460,7 +447,7 @@ export default function VendorDashboard({
                               Midnight Deal
                             </span>
                           )}
-                          {product.discountPrice < product.originalPrice && (
+                          {product.promo_tag && (
                             <span className="text-[9px] font-black uppercase text-amber-500 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-md flex items-center gap-1">
                               <svg
                                 className="w-2.5 h-2.5 stroke-current"
@@ -470,7 +457,7 @@ export default function VendorDashboard({
                               >
                                 <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
                               </svg>
-                              {product.promoTag || "POTONGAN HARGA"}
+                              {product.promo_tag}
                             </span>
                           )}
                         </div>
@@ -481,14 +468,8 @@ export default function VendorDashboard({
 
                         <div className="flex items-baseline gap-2 mt-1">
                           <span className="text-sm font-black text-emerald-500">
-                            Rp {product.discountPrice?.toLocaleString("id-ID")}
+                            Rp {Number(product.price).toLocaleString("id-ID")}
                           </span>
-                          {product.discountPrice < product.originalPrice && (
-                            <span className="text-[11px] line-through text-slate-400 font-semibold">
-                              Rp{" "}
-                              {product.originalPrice?.toLocaleString("id-ID")}
-                            </span>
-                          )}
                         </div>
                       </div>
 
@@ -581,7 +562,7 @@ export default function VendorDashboard({
               <div className="text-center space-y-2">
                 <div
                   className={`w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-3 ${
-                    confirmTarget.isActive !== false
+                    confirmTarget.is_active !== false
                       ? "bg-amber-500/10 text-amber-500 border border-amber-500/20"
                       : "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
                   }`}
@@ -599,7 +580,7 @@ export default function VendorDashboard({
                 </div>
 
                 <h3 className="font-extrabold text-base leading-snug">
-                  {confirmTarget.isActive !== false
+                  {confirmTarget.is_active !== false
                     ? "Nonaktifkan Menu?"
                     : "Aktifkan Kembali Menu?"}
                 </h3>
@@ -607,7 +588,7 @@ export default function VendorDashboard({
                 <p className="text-xs text-slate-400 font-medium leading-relaxed">
                   Kamu akan{" "}
                   <span className="font-extrabold text-amber-500">
-                    {confirmTarget.isActive !== false
+                    {confirmTarget.is_active !== false
                       ? "menonaktifkan"
                       : "mengaktifkan kembali"}
                   </span>{" "}
@@ -638,12 +619,12 @@ export default function VendorDashboard({
                   type="button"
                   onClick={executeToggleActive}
                   className={`w-full py-2.5 rounded-xl font-extrabold text-xs text-white transition-all shadow-md ${
-                    confirmTarget.isActive !== false
+                    confirmTarget.is_active !== false
                       ? "bg-amber-600 hover:bg-amber-500 shadow-amber-600/20"
                       : "bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/20"
                   }`}
                 >
-                  {confirmTarget.isActive !== false
+                  {confirmTarget.is_active !== false
                     ? "Ya, Nonaktifkan"
                     : "Ya, Aktifkan"}
                 </button>

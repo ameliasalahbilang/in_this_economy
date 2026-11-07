@@ -13,24 +13,8 @@ export default function BudgetForm({
     return cleanNum ? parseInt(cleanNum, 10).toLocaleString("id-ID") : "";
   };
 
-  const [budgetValue, setBudgetValue] = useState(() => {
-    const saved = localStorage.getItem("user_budget_amount");
-    return saved || "";
-  });
-  const [selectedCategories, setSelectedCategories] = useState(() => {
-    const saved = localStorage.getItem("user_selected_categories");
-    return saved ? JSON.parse(saved) : [];
-  });
-  const toggleCategory = (cat) => {
-    if (selectedCategories.includes(cat)) {
-      setSelectedCategories(selectedCategories.filter((c) => c !== cat));
-    } else {
-      setSelectedCategories([...selectedCategories, cat]);
-    }
-  };
-
   // 1. Inisialisasi State Input dengan Fallback Aman saat calculation = null
-const [displayBudget, setDisplayBudget] = useState(() => {
+  const [displayBudget, setDisplayBudget] = useState(() => {
     return calculation?.totalBudget
       ? formatNumberWithDots(calculation.totalBudget)
       : "";

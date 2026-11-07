@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import { extractGoogleMapsCoordinates } from "../../utils/location";
 
 export default function VendorForm({
   onAddProduct,
@@ -12,15 +11,12 @@ export default function VendorForm({
   const isEditMode = Boolean(initialData);
 
   const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
   const [hasPromo, setHasPromo] = useState(false);
-  const [discountPrice, setDiscountPrice] = useState("");
   const [promoTag, setPromoTag] = useState("PROMO MAHASISWA");
   const [category, setCategory] = useState("makan");
   const [isLateNight, setIsLateNight] = useState(false);
   const [imagePreview, setImagePreview] = useState("");
-  const [priceError, setPriceError] = useState("");
   const [submitError, setSubmitError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
@@ -36,54 +32,18 @@ export default function VendorForm({
 
   const parseNumber = (val) => Number(String(val || 0).replace(/\D/g, ""));
 
-  const handlePriceChange = (val, isDiscount = false) => {
-    const formatted = formatRupiah(val);
-
-    let normalVal = parseNumber(price);
-    let promoVal = parseNumber(discountPrice);
-
-    if (isDiscount) {
-      promoVal = parseNumber(formatted);
-      setDiscountPrice(formatted);
-    } else {
-      normalVal = parseNumber(formatted);
-      setPrice(formatted);
-    }
-
-    if (hasPromo && promoVal > 0 && normalVal > 0) {
-      if (promoVal >= normalVal) {
-        setPriceError("Harga promo harus lebih murah daripada harga normal!");
-      } else {
-        setPriceError("");
-      }
-    } else {
-      setPriceError("");
-    }
-  };
-
   useEffect(() => {
     if (initialData) {
       setName(initialData.name || "");
-      setDescription(initialData.description || "");
       setPrice(
-        initialData.originalPrice
-          ? formatRupiah(String(initialData.originalPrice))
-          : "",
+        initialData.price ? formatRupiah(String(initialData.price)) : "",
       );
 
-      const hasDiscount = Boolean(
-        initialData.discountPrice &&
-        initialData.discountPrice < initialData.originalPrice,
-      );
-      setHasPromo(hasDiscount);
-      setDiscountPrice(
-        hasDiscount ? formatRupiah(String(initialData.discountPrice)) : "",
-      );
-
-      setPromoTag(initialData.promoTag || "PROMO MAHASISWA");
+      setHasPromo(Boolean(initialData.promo_tag));
+      setPromoTag(initialData.promo_tag || "PROMO MAHASISWA");
       setCategory(initialData.category || "makan");
-      setIsLateNight(Boolean(initialData.isLateNight));
-      setImagePreview(initialData.image || "");
+      setIsLateNight(Boolean(initialData.is_late_night));
+      setImagePreview(initialData.image_url || "");
     }
   }, [initialData]);
 
@@ -103,46 +63,25 @@ export default function VendorForm({
     e.preventDefault();
     setSubmitError("");
     const normalNumber = parseNumber(price);
-    const promoNumber = parseNumber(discountPrice);
-
-    if (hasPromo && promoNumber >= normalNumber) {
-      setPriceError("Harga promo harus lebih murah daripada harga normal!");
+    if (!name.trim() || normalNumber <= 0) {
+      setSubmitError("Nama produk dan harga yang valid wajib diisi.");
       return;
     }
-
-    const originalVal = parseRawNumber(price);
-    const discountVal =
-      hasPromo && discountPrice ? parseRawNumber(discountPrice) : originalVal;
 
     const productPayload = {
       ...(initialData?.id ? { id: initialData.id } : {}),
       name,
-      description,
-      storeName:
-        currentUser?.storeName || currentUser?.name || "Wedangan Bu Amel",
-      ownerName:
-        currentUser?.ownerName || currentUser?.owner || "Amelia Salsabila",
-      merchantId: currentUser?.id,
-      whatsapp: currentUser?.phone || currentUser?.whatsapp || "081234567890",
-      gmapsUrl: currentUser?.gmapsUrl || "https://maps.google.com",
-      lat:
-        currentUser?.lat ??
-        extractGoogleMapsCoordinates(currentUser?.gmapsUrl)?.lat ??
-        null,
-      lng:
-        currentUser?.lng ??
-        extractGoogleMapsCoordinates(currentUser?.gmapsUrl)?.lng ??
-        null,
+      vendor_id: currentUser?.id,
+      price: parseRawNumber(price),
+      maps_url: currentUser?.gmaps_url || "",
       category,
-      originalPrice: originalVal,
-      discountPrice: discountVal,
-      isLateNight,
-      promoTag: hasPromo ? promoTag || "PROMO SPECIAL" : null,
-      image:
+      is_late_night: isLateNight,
+      promo_tag: hasPromo ? promoTag || "PROMO SPECIAL" : null,
+      image_url:
         imagePreview ||
         "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500&auto=format&fit=crop&q=60",
-      isActive:
-        initialData?.isActive !== undefined ? initialData.isActive : true,
+      is_active:
+        initialData?.is_active !== undefined ? initialData.is_active : true,
     };
 
     setIsSaving(true);
@@ -179,10 +118,7 @@ export default function VendorForm({
               {isEditMode ? "Edit Menu / Promo" : "Tambah Menu / Promo Baru"}
             </h3>
             <p className="text-[11px] text-emerald-500 font-bold">
-              Toko:{" "}
-              {currentUser?.storeName ||
-                currentUser?.name ||
-                "Wedangan Bu Amel"}
+              Toko: {currentUser?.store_name || "Toko"}
             </p>
           </div>
           <button
@@ -246,23 +182,6 @@ export default function VendorForm({
             />
           </div>
 
-          <div>
-            <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1">
-              Deskripsi (Opsional)
-            </label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Informasi singkat tentang produk"
-              rows={2}
-              className={`w-full px-3.5 py-2 border rounded-xl font-bold text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
-                darkMode
-                  ? "bg-slate-800 border-slate-700 text-slate-100"
-                  : "bg-slate-50 border-slate-200 text-slate-800"
-              }`}
-            />
-          </div>
-
           {/* KATEGORI */}
           <div>
             <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1">
@@ -284,10 +203,10 @@ export default function VendorForm({
             </select>
           </div>
 
-          {/* HARGA NORMAL */}
+          {/* HARGA PRODUK */}
           <div>
             <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1">
-              Harga Normal (Rp)
+              Harga (Rp)
             </label>
             <div className="relative flex items-center">
               <span
@@ -299,7 +218,7 @@ export default function VendorForm({
                 type="text"
                 inputMode="numeric"
                 value={price}
-                onChange={(e) => handlePriceChange(e.target.value, false)}
+                onChange={(e) => setPrice(formatRupiah(e.target.value))}
                 placeholder="15.000"
                 className={`w-full pl-9 pr-3.5 py-2 border rounded-xl font-bold text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
                   darkMode
@@ -311,7 +230,7 @@ export default function VendorForm({
             </div>
           </div>
 
-          {/* TOGGLE & INPUT HARGA PROMO */}
+          {/* TOGGLE PROMO */}
           <div
             className={`p-3.5 rounded-2xl border border-dashed transition-all space-y-3 ${
               hasPromo
@@ -327,7 +246,7 @@ export default function VendorForm({
                   Aktifkan Harga Promo / Diskon?
                 </span>
                 <span className="text-[10px] text-slate-400 font-medium block">
-                  Berikan potongan harga khusus mahasiswa
+                  Tandai produk ini sebagai promo khusus mahasiswa
                 </span>
               </div>
               <input
@@ -336,9 +255,9 @@ export default function VendorForm({
                 onChange={(e) => {
                   setHasPromo(e.target.checked);
                   if (!e.target.checked) {
-                    setDiscountPrice("");
                     setPromoTag("");
-                    setPriceError("");
+                  } else if (!promoTag) {
+                    setPromoTag("PROMO MAHASISWA");
                   }
                 }}
                 className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 accent-emerald-600"
@@ -347,39 +266,6 @@ export default function VendorForm({
 
             {hasPromo && (
               <div className="space-y-3 pt-2 border-t border-slate-200 dark:border-slate-800/80">
-                <div>
-                  <label className="block text-[10px] font-extrabold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 mb-1">
-                    Harga Promo (Rp)
-                  </label>
-                  <div className="relative flex items-center">
-                    <span className="absolute left-3 text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                      Rp
-                    </span>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={discountPrice}
-                      onChange={(e) => handlePriceChange(e.target.value, true)}
-                      placeholder="10.000"
-                      className={`w-full pl-9 pr-3.5 py-2 border rounded-xl font-bold text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
-                        priceError
-                          ? "border-rose-500 bg-rose-500/5"
-                          : darkMode
-                            ? "bg-slate-800 border-slate-700 text-slate-100"
-                            : "bg-white border-slate-200 text-slate-800"
-                      }`}
-                      required={hasPromo}
-                    />
-                  </div>
-
-                  {/* PESAN PERINGATAN HARGA ERROR */}
-                  {priceError && (
-                    <p className="text-[10px] font-bold text-rose-500 mt-1.5 flex items-center gap-1">
-                      <span>⚠️</span> {priceError}
-                    </p>
-                  )}
-                </div>
-
                 <div>
                   <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1">
                     Nama / Badge Promo (Opsional)

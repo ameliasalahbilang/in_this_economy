@@ -8,7 +8,6 @@ import VendorDashboard from "./components/vendor/VendorDashboard";
 import AdminDashboard from "./components/admin/AdminDashboard";
 import VendorForm from "./components/vendor/VendorForm";
 import LoginForm from "./components/auth/LoginForm";
-import { mockFoods as initialFoods } from "./data/mockData";
 import { isSupabaseConfigured, supabase } from "./supabase";
 import {
   calculateDistanceInKm,
@@ -17,47 +16,18 @@ import {
   UNS_COORDINATES,
 } from "./utils/location";
 
-const mapSupabaseMerchant = (row) => ({
-  id: row.id,
-  userId: row.user_id,
-  name: row.store_name,
-  storeName: row.store_name,
-  owner: row.owner_name || "",
-  ownerName: row.owner_name || "",
-  phone: row.phone || "",
-  gmapsUrl: row.gmaps_url || "",
-  category: row.category || "makan",
-  isActive: row.is_active !== false,
-  lat: row.lat == null ? undefined : Number(row.lat),
-  lng: row.lng == null ? undefined : Number(row.lng),
-  role: "umkm",
-});
-
-const mapSupabaseProduct = (row) => ({
-  id: row.id,
-  name: row.name,
-  merchantId: row.merchant_id,
-  storeName: row.store_name || "",
-  category: row.category || "makan",
-  originalPrice: Number(row.original_price),
-  discountPrice: Number(row.discount_price ?? row.original_price),
-  isLateNight: Boolean(row.is_late_night),
-  promoTag: row.promo_tag || null,
-  image: row.image || "",
-  isActive: row.is_active !== false,
-});
+const mapSupabaseMerchant = (row) => ({ ...row, role: "umkm" });
 
 const toSupabaseProduct = (product) => ({
-  merchant_id: product.merchantId,
-  store_name: product.storeName,
+  vendor_id: product.vendor_id,
   name: product.name,
+  price: product.price,
+  image_url: product.image_url || null,
+  maps_url: product.maps_url || null,
   category: product.category || null,
-  original_price: product.originalPrice,
-  discount_price: product.discountPrice,
-  is_late_night: Boolean(product.isLateNight),
-  promo_tag: product.promoTag || null,
-  image: product.image || null,
-  is_active: product.isActive !== false,
+  is_late_night: Boolean(product.is_late_night),
+  promo_tag: product.promo_tag || null,
+  is_active: product.is_active !== false,
 });
 
 export default function App() {
@@ -69,7 +39,7 @@ export default function App() {
   const [darkMode, setDarkMode] = useState(() => {
     return localStorage.getItem("theme") === "dark";
   });
-  const [products, setProducts] = useState([]);
+  const [foods, setFoods] = useState([]);
   const [productError, setProductError] = useState("");
   const [merchants, setMerchants] = useState([]);
 
@@ -90,14 +60,14 @@ export default function App() {
         (payload) => {
           if (!isMounted) return;
           if (payload.eventType === "DELETE") {
-            setProducts((current) =>
-              current.filter((product) => product.id !== payload.old.id),
+            setFoods((current) =>
+              current.filter((food) => food.id !== payload.old.id),
             );
             return;
           }
 
-          const product = mapSupabaseProduct(payload.new);
-          setProducts((current) => {
+          const product = payload.new;
+          setFoods((current) => {
             const existingIndex = current.findIndex(
               (item) => item.id === product.id,
             );
@@ -137,7 +107,9 @@ export default function App() {
     const loadCatalog = async () => {
       const [merchantsResult, productsResult] = await Promise.all([
         supabase.from("merchants").select("*"),
-        supabase.from("products").select("*"),
+        supabase
+          .from("products")
+          .select("*, merchants(id, store_name, owner_name, phone)"),
       ]);
 
       if (!isMounted) return;
@@ -162,7 +134,7 @@ export default function App() {
           `Gagal memuat katalog: ${productsResult.error.message}`,
         );
       } else {
-        setProducts(productsResult.data.map(mapSupabaseProduct));
+        setFoods(productsResult.data);
         if (!merchantsResult.error) setProductError("");
       }
     };
@@ -181,20 +153,22 @@ export default function App() {
 
   const handleRegisterMerchant = async (merchant) => {
     if (!supabase) throw new Error("Supabase belum dikonfigurasi.");
-    const coordinates = extractGoogleMapsCoordinates(merchant.gmapsUrl);
+    const coordinates = extractGoogleMapsCoordinates(merchant.gmaps_url);
     const { data, error } = await supabase
       .from("merchants")
-      .insert({
-        user_id: merchant.userId,
-        store_name: merchant.storeName,
-        owner_name: merchant.ownerName,
-        phone: merchant.phone,
-        gmaps_url: merchant.gmapsUrl,
-        category: merchant.category,
-        is_active: true,
-        lat: coordinates?.lat ?? null,
-        lng: coordinates?.lng ?? null,
-      })
+      .insert([
+        {
+          user_id: merchant.user_id,
+          store_name: merchant.store_name,
+          owner_name: merchant.owner_name,
+          phone: merchant.phone,
+          gmaps_url: merchant.gmaps_url,
+          category: merchant.category,
+          is_active: true,
+          lat: coordinates?.lat ?? null,
+          lng: coordinates?.lng ?? null,
+        },
+      ])
       .select()
       .single();
 
@@ -211,14 +185,14 @@ export default function App() {
     return savedMerchant;
   };
 
-  const handleToggleMerchantStatus = async (merchantId) => {
+  const handleToggleMerchantStatus = async (merchantRecordId) => {
     if (!supabase) throw new Error("Supabase belum dikonfigurasi.");
-    const merchant = merchants.find((item) => item.id === merchantId);
+    const merchant = merchants.find((item) => item.id === merchantRecordId);
     if (!merchant) throw new Error("Merchant tidak ditemukan.");
     const { data, error } = await supabase
       .from("merchants")
-      .update({ is_active: merchant.isActive === false })
-      .eq("id", merchantId)
+      .update({ is_active: merchant.is_active === false })
+      .eq("id", merchantRecordId)
       .select()
       .single();
 
@@ -228,56 +202,51 @@ export default function App() {
     }
     const savedMerchant = mapSupabaseMerchant(data);
     setMerchants((current) =>
-      current.map((item) => (item.id === merchantId ? savedMerchant : item)),
+      current.map((item) =>
+        item.id === merchantRecordId ? savedMerchant : item,
+      ),
     );
   };
   const handleToggleProductStatus = async (productId) => {
-    const product = products.find((item) => item.id === productId);
+    const product = foods.find((item) => item.id === productId);
     if (!product) throw new Error("Produk tidak ditemukan.");
     await updateProduct({
       ...product,
-      isActive: product.isActive === false,
+      is_active: product.is_active === false,
     });
   };
 
   const getFoodCoordinates = (food) => {
-    if (Number.isFinite(food.lat) && Number.isFinite(food.lng)) {
-      return { lat: food.lat, lng: food.lng };
+    const merchant = merchants.find((item) => item.id === food.vendor_id);
+    if (merchant?.lat != null && merchant?.lng != null) {
+      return { lat: Number(merchant.lat), lng: Number(merchant.lng) };
     }
-
-    const merchant = merchants.find((item) => item.id === food.merchantId);
-    const mapUrl = food.gmapsUrl || merchant?.gmapsUrl || "";
+    const mapUrl = food.maps_url || merchant?.gmaps_url || "";
     return extractGoogleMapsCoordinates(mapUrl);
   };
 
-  const enrichedProducts = products.map((product) => {
+  const enrichedFoods = foods.map((food) => {
     const merchant =
-      merchants.find((item) => item.id === product.merchantId) ||
-      merchants.find((item) => item.storeName === product.storeName);
+      merchants.find((item) => item.id === food.vendor_id) || food.merchants;
     return {
-      ...product,
-      merchantId: product.merchantId || merchant?.id,
-      storeName: product.storeName || merchant?.storeName || "",
-      ownerName: merchant?.ownerName || "",
-      whatsapp: merchant?.phone || "",
-      gmapsUrl: merchant?.gmapsUrl || "",
-      lat: merchant?.lat,
-      lng: merchant?.lng,
+      ...food,
+      merchants: merchant,
+      maps_url: food.maps_url || merchant?.gmaps_url || "",
     };
   });
 
-  const visibleProductsForUser = enrichedProducts.filter((product) => {
-    const isProductActive = product.isActive !== false;
-    const storeMerchant = merchants.find((m) => m.id === product.merchantId);
+  const visibleProductsForUser = enrichedFoods.filter((food) => {
+    const isProductActive = food.is_active !== false;
+    const storeMerchant = merchants.find((m) => m.id === food.vendor_id);
     const isStoreActive = storeMerchant
-      ? storeMerchant.isActive !== false
+      ? storeMerchant.is_active !== false
       : true;
 
     return isProductActive && isStoreActive;
   });
   const handleAddProduct = async (newProduct) => {
     if (!supabase) throw new Error("Supabase belum dikonfigurasi.");
-    if (!newProduct.merchantId) throw new Error("Merchant produk tidak valid.");
+    if (!newProduct.vendor_id) throw new Error("Merchant produk tidak valid.");
     const { data, error } = await supabase
       .from("products")
       .insert(toSupabaseProduct(newProduct))
@@ -288,8 +257,8 @@ export default function App() {
       throw error;
     }
     setProductError("");
-    const savedProduct = mapSupabaseProduct(data);
-    setProducts((current) => [
+    const savedProduct = data;
+    setFoods((current) => [
       savedProduct,
       ...current.filter((item) => item.id !== savedProduct.id),
     ]);
@@ -298,7 +267,7 @@ export default function App() {
 
   const updateProduct = async (product) => {
     if (!supabase) throw new Error("Supabase belum dikonfigurasi.");
-    if (!product.merchantId) throw new Error("Merchant produk tidak valid.");
+    if (!product.vendor_id) throw new Error("Merchant produk tidak valid.");
     const { data, error } = await supabase
       .from("products")
       .update(toSupabaseProduct(product))
@@ -310,8 +279,8 @@ export default function App() {
       throw error;
     }
     setProductError("");
-    const savedProduct = mapSupabaseProduct(data);
-    setProducts((current) =>
+    const savedProduct = data;
+    setFoods((current) =>
       current.map((item) =>
         item.id === savedProduct.id ? savedProduct : item,
       ),
@@ -325,7 +294,6 @@ export default function App() {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [userLocation, setUserLocation] = useState(UNS_COORDINATES);
   const [isLiveGPS, setIsLiveGPS] = useState(false);
-  const [foods, setFoods] = useState(initialFoods);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return undefined;
@@ -462,11 +430,17 @@ export default function App() {
 
   useEffect(() => {
     if (calculation?.allocations && calculation.allocations.length > 0) {
-      if (!calculation.allocations.includes(activeCategoryTab)) {
+      if (
+        activeCategoryTab !== "semua" &&
+        !calculation.allocations.some(
+          (category) =>
+            category?.toLowerCase() === activeCategoryTab.toLowerCase(),
+        )
+      ) {
         setActiveCategoryTab(calculation.allocations[0]);
       }
     }
-  }, [calculation]);
+  }, [activeCategoryTab, calculation]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -504,13 +478,16 @@ export default function App() {
       setProductError(`Gagal menghapus produk: ${error.message}`);
       throw error;
     }
-    setProducts((current) => current.filter((item) => item.id !== id));
+    setFoods((current) => current.filter((item) => item.id !== id));
   };
 
   const handleToggleLateNight = async (productId) => {
-    const product = products.find((item) => item.id === productId);
+    const product = foods.find((item) => item.id === productId);
     if (!product) throw new Error("Produk tidak ditemukan.");
-    await updateProduct({ ...product, isLateNight: !product.isLateNight });
+    await updateProduct({
+      ...product,
+      is_late_night: !product.is_late_night,
+    });
   };
 
   const handleBudgetCalculated = (newCalc) => {
@@ -563,17 +540,17 @@ export default function App() {
     if (!selectedDeal) return;
 
     if (type === "wa") {
-      const targetWa = selectedDeal.whatsapp || "6281234567890";
+      const targetWa = selectedDeal.merchants?.phone || "6281234567890";
       const text = encodeURIComponent(
-        `Halo ${selectedDeal.storeName}, saya lihat promo "${selectedDeal.name}" di In This Economy. Apakah stoknya ready?`,
+        `Halo ${selectedDeal.merchants?.store_name || "-"}, saya lihat promo "${selectedDeal.name}" di In This Economy. Apakah stoknya ready?`,
       );
       window.open(`https://wa.me/${targetWa}?text=${text}`, "_blank");
     } else if (type === "gmaps") {
-      if (selectedDeal.gmapsUrl) {
-        window.open(selectedDeal.gmapsUrl, "_blank");
+      if (selectedDeal.maps_url) {
+        window.open(selectedDeal.maps_url, "_blank");
       } else {
         const query = encodeURIComponent(
-          `${selectedDeal.storeName} ${selectedDeal.name}`,
+          `${selectedDeal.merchants?.store_name || "-"} ${selectedDeal.name}`,
         );
         window.open(
           `https://www.google.com/maps/search/?api=1&query=${query}`,
@@ -586,6 +563,11 @@ export default function App() {
   };
 
   const filteredFoods = visibleProductsForUser.filter((food) => {
+    if (food.is_active === false) return false;
+
+    const price = Number(food.price || 0);
+    if (!Number.isFinite(price) || price <= 0) return false;
+
     const coordinates = getFoodCoordinates(food);
     if (!coordinates) return false;
 
@@ -597,16 +579,27 @@ export default function App() {
     );
     if (distance === null || distance > 10) return false;
 
-    if (showLateNightOnly && !food.isLateNight) return false;
+    if (showLateNightOnly && !food.is_late_night) return false;
 
     if (calculation) {
       const { dailyBudget, allocations } = calculation;
       const activeAllocations =
         allocations && allocations.length > 0 ? allocations : ["makan"];
-      if (!activeAllocations.includes(food.category)) return false;
-      if (food.category !== activeCategoryTab) return false;
+      const foodCategory = food.category?.toLowerCase();
+      if (
+        !foodCategory ||
+        !activeAllocations.some(
+          (category) => category?.toLowerCase() === foodCategory,
+        )
+      )
+        return false;
+      if (
+        activeCategoryTab.toLowerCase() !== "semua" &&
+        foodCategory !== activeCategoryTab.toLowerCase()
+      )
+        return false;
       const budgetPerCategory = dailyBudget / activeAllocations.length;
-      return food.discountPrice <= budgetPerCategory;
+      return price <= budgetPerCategory;
     }
 
     return true;
@@ -650,7 +643,7 @@ export default function App() {
             </div>
             <p className="text-[11px] text-slate-400 font-medium mt-0.5">
               {currentUser
-                ? `Mode Dashboard ${currentUser.role === "admin" ? "Super Admin" : "Mitra"} (${currentUser.name})`
+                ? `Mode Dashboard ${currentUser.role === "admin" ? "Super Admin" : "Mitra"} (${currentUser.role === "admin" ? "Super Admin" : currentUser.store_name || ""})`
                 : "Alokasi Budget & Smart Partner Platform"}
             </p>
           </div>
@@ -756,7 +749,7 @@ export default function App() {
         )}
         {currentUser?.role === "admin" ? (
           <AdminDashboard
-            foods={products}
+            foods={foods}
             merchants={merchants}
             onToggleMerchantStatus={handleToggleMerchantStatus}
             onToggleProductStatus={handleToggleProductStatus}
@@ -767,13 +760,12 @@ export default function App() {
           />
         ) : currentUser?.role === "umkm" ? (
           <VendorDashboard
-            products={products}
+            products={foods}
             onAddProduct={handleAddProduct}
             onUpdateProduct={updateProduct}
             onToggleProductStatus={handleToggleProductStatus}
             currentUser={currentUser}
             userLocation={userLocation}
-            foods={foods}
             onDeleteProduct={handleDeleteProduct}
             onOpenAddModal={() => setShowVendorModal(true)}
             onToggleLateNight={handleToggleLateNight}
@@ -1091,11 +1083,11 @@ export default function App() {
 
             <div>
               <span className="text-xs font-bold text-emerald-500 uppercase">
-                {selectedDeal.storeName}
+                {selectedDeal.merchants?.store_name || "-"}
               </span>
               <h4 className="font-extrabold text-sm">{selectedDeal.name}</h4>
               <p className="text-lg font-black text-emerald-500 mt-1">
-                Rp {selectedDeal.discountPrice.toLocaleString("id-ID")}
+                Rp {Number(selectedDeal.price).toLocaleString("id-ID")}
               </p>
             </div>
 

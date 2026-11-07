@@ -8,13 +8,12 @@ export default function LoginForm({
   darkMode,
 }) {
   const [isRegister, setIsRegister] = useState(false);
-  const [storeName, setStoreName] = useState("");
-  const [ownerName, setOwnerName] = useState("");
+  const [store_name, set_store_name] = useState("");
+  const [owner_name, set_owner_name] = useState("");
   const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [formData, setFormData] = useState({ email: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
-  const [gmapsUrl, setGmapsUrl] = useState("");
+  const [gmaps_url, set_gmaps_url] = useState("");
   const [category, setCategory] = useState("makan");
 
   // State Alert Pesan Error di Dalam Modal
@@ -29,7 +28,7 @@ export default function LoginForm({
     if (
       !isRegister &&
       (phone === "08000000" || phone === "admin") &&
-      password === "admin123"
+      formData.password === "admin123"
     ) {
       onLogin({
         id: "admin-super",
@@ -43,12 +42,12 @@ export default function LoginForm({
 
     if (isRegister) {
       if (
-        !storeName ||
-        !ownerName ||
-        !phone ||
-        !email ||
-        !password ||
-        !gmapsUrl
+        !store_name.trim() ||
+        !owner_name.trim() ||
+        !phone.trim() ||
+        !formData.email.trim() ||
+        !formData.password.trim() ||
+        !gmaps_url.trim()
       ) {
         setErrorMessage("Mohon lengkapi seluruh data pendaftaran toko.");
         return;
@@ -70,11 +69,11 @@ export default function LoginForm({
           throw new Error("Supabase belum dikonfigurasi.");
         }
 
-        const normalizedEmail = email.trim().toLowerCase();
+        const normalizedEmail = formData.email.trim().toLowerCase();
         const { data: authData, error: authError } = await supabase.auth.signUp(
           {
             email: normalizedEmail,
-            password,
+            password: formData.password,
           },
         );
 
@@ -86,11 +85,11 @@ export default function LoginForm({
         }
 
         const savedMerchant = await onRegister({
-          userId: authData.user.id,
-          storeName,
-          ownerName,
+          user_id: authData.user.id,
+          store_name,
+          owner_name,
           phone,
-          gmapsUrl,
+          gmaps_url,
           category,
         });
 
@@ -111,7 +110,7 @@ export default function LoginForm({
         setIsSubmitting(false);
       }
     } else {
-      if (!email || !password) {
+      if (!formData.email || !formData.password) {
         setErrorMessage("Masukkan email dan password akun toko.");
         return;
       }
@@ -123,11 +122,11 @@ export default function LoginForm({
 
       setIsSubmitting(true);
       try {
-        const normalizedEmail = email.trim().toLowerCase();
+        const normalizedEmail = formData.email.trim().toLowerCase();
         const { data: authData, error: authError } =
           await supabase.auth.signInWithPassword({
-            email: normalizedEmail,
-            password,
+            email: formData.email.trim().toLowerCase(),
+            password: formData.password,
           });
 
         if (authError) {
@@ -164,17 +163,7 @@ export default function LoginForm({
         }
 
         onLogin({
-          id: merchantRow.id,
-          name: merchantRow.store_name,
-          storeName: merchantRow.store_name,
-          owner: merchantRow.owner_name || "",
-          ownerName: merchantRow.owner_name || "",
-          phone: merchantRow.phone || "",
-          gmapsUrl: merchantRow.gmaps_url || "",
-          category: merchantRow.category || "makan",
-          isActive: merchantRow.is_active !== false,
-          lat: merchantRow.lat == null ? undefined : Number(merchantRow.lat),
-          lng: merchantRow.lng == null ? undefined : Number(merchantRow.lng),
+          ...merchantRow,
           role: "umkm",
           email: normalizedEmail,
         });
@@ -252,8 +241,8 @@ export default function LoginForm({
               </label>
               <input
                 type="text"
-                value={storeName}
-                onChange={(e) => setStoreName(e.target.value)}
+                value={store_name}
+                onChange={(e) => set_store_name(e.target.value)}
                 placeholder="Contoh: Warung Makan Berkah"
                 className={`w-full px-3.5 py-2 border rounded-xl font-bold text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
                   darkMode
@@ -269,8 +258,8 @@ export default function LoginForm({
               </label>
               <input
                 type="text"
-                value={ownerName}
-                onChange={(e) => setOwnerName(e.target.value)}
+                value={owner_name}
+                onChange={(e) => set_owner_name(e.target.value)}
                 placeholder="Contoh: Pak Budi"
                 className={`w-full px-3.5 py-2 border rounded-xl font-bold text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
                   darkMode
@@ -290,8 +279,13 @@ export default function LoginForm({
             </label>
             <input
               type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={formData.email}
+              onChange={(e) =>
+                setFormData((current) => ({
+                  ...current,
+                  email: e.target.value,
+                }))
+              }
               placeholder="nama@email.com"
               autoComplete="email"
               className={`w-full px-3.5 py-2 border rounded-xl font-bold text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
@@ -331,8 +325,13 @@ export default function LoginForm({
           <div className="relative">
             <input
               type={showPassword ? "text" : "password"}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              value={formData.password}
+              onChange={(e) =>
+                setFormData((current) => ({
+                  ...current,
+                  password: e.target.value,
+                }))
+              }
               placeholder="••••••••"
               autoComplete={isRegister ? "new-password" : "current-password"}
               minLength={isRegister ? 6 : undefined}
@@ -385,8 +384,13 @@ export default function LoginForm({
               </label>
               <input
                 type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                value={formData.email}
+                onChange={(e) =>
+                  setFormData((current) => ({
+                    ...current,
+                    email: e.target.value,
+                  }))
+                }
                 placeholder="nama@email.com"
                 autoComplete="email"
                 className={`w-full px-3.5 py-2 border rounded-xl font-bold text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
@@ -403,8 +407,8 @@ export default function LoginForm({
               </label>
               <input
                 type="url"
-                value={gmapsUrl}
-                onChange={(e) => setGmapsUrl(e.target.value)}
+                value={gmaps_url}
+                onChange={(e) => set_gmaps_url(e.target.value)}
                 placeholder="https://maps.app.goo.gl/..."
                 className={`w-full px-3.5 py-2 border rounded-xl font-bold text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
                   darkMode
@@ -457,8 +461,7 @@ export default function LoginForm({
             setIsRegister(!isRegister);
             setErrorMessage("");
             setPhone("");
-            setEmail("");
-            setPassword("");
+            setFormData({ email: "", password: "" });
           }}
           className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline"
         >

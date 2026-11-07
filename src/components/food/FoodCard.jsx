@@ -8,9 +8,6 @@ export default function FoodCard({
   darkMode,
   distance,
 }) {
-  const originalPrice =
-    item.originalPrice || Math.round((item.discountPrice * 1.25) / 1000) * 1000;
-
   return (
     <div
       onClick={() => onClaim(item)}
@@ -22,20 +19,20 @@ export default function FoodCard({
     >
       <div className="relative flex-shrink-0">
         <img
-          src={item.image}
+          src={item.image_url || ""}
           alt={item.name}
           className="w-full h-44 object-cover group-hover:scale-105 transition-transform duration-500"
         />
 
         <div className="absolute top-3 left-3 right-3 flex justify-between items-start">
           <div className="flex flex-col gap-1">
-            {item.isLateNight ? (
+            {item.is_late_night ? (
               <span className="text-[9px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg bg-indigo-600 text-white shadow-md shadow-indigo-600/20 backdrop-blur-md">
                 MIDNIGHT DEALS
               </span>
-            ) : item.promoTag && item.promoTag !== "Reguler" ? (
+            ) : item.promo_tag ? (
               <span className="text-[9px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg bg-amber-500 text-white shadow-md shadow-amber-500/20 backdrop-blur-md">
-                {item.promoTag}
+                {item.promo_tag}
               </span>
             ) : null}
           </div>
@@ -62,7 +59,7 @@ export default function FoodCard({
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-2">
             <span className="text-[11px] font-extrabold text-emerald-500 dark:text-emerald-400 uppercase tracking-wider leading-tight">
-              {item.storeName}
+              {item.merchants?.store_name || "-"}
             </span>
 
             <span className="text-[10px] font-bold text-slate-400 flex-shrink-0">
@@ -87,10 +84,7 @@ export default function FoodCard({
           className="pt-3 border-t border-slate-200 dark:border-slate-700 space-y-0.5"
         >
           <div className="text-lg md:text-xl font-black text-emerald-500 leading-none">
-            Rp {item.discountPrice.toLocaleString("id-ID")}
-          </div>
-          <div className="text-xs text-slate-400 font-bold line-through">
-            Rp {originalPrice.toLocaleString("id-ID")}
+            Rp {Number(item.price).toLocaleString("id-ID")}
           </div>
         </div>
       </div>

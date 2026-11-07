@@ -27,7 +27,7 @@ export default function AdminDashboard({
   const [confirmActionError, setConfirmActionError] = useState("");
 
   const triggerMerchantStatusToggle = (merchant) => {
-    const isCurrentlyActive = merchant.isActive !== false;
+    const isCurrentlyActive = merchant.is_active !== false;
     setConfirmActionError("");
     setConfirmModal({
       isOpen: true,
@@ -35,15 +35,15 @@ export default function AdminDashboard({
         ? "Nonaktifkan Mitra UMKM?"
         : "Aktifkan Kembali Mitra?",
       message: isCurrentlyActive
-        ? `Apakah kamu yakin ingin me-nonaktifkan "${merchant.name}"? Seluruh produk toko ini akan disembunyikan dari katalog mahasiswa secara real-time.`
-        : `Aktifkan kembali "${merchant.name}" agar promonya tayang kembali di feed mahasiswa.`,
+        ? `Apakah kamu yakin ingin me-nonaktifkan "${merchant.store_name}"? Seluruh produk toko ini akan disembunyikan dari katalog mahasiswa secara real-time.`
+        : `Aktifkan kembali "${merchant.store_name}" agar promonya tayang kembali di feed mahasiswa.`,
       actionType: "toggle_merchant",
       targetId: merchant.id,
     });
   };
 
   const triggerProductStatusToggle = (product) => {
-    const isCurrentlyActive = product.isActive !== false;
+    const isCurrentlyActive = product.is_active !== false;
     setConfirmActionError("");
     setConfirmModal({
       isOpen: true,
@@ -51,7 +51,7 @@ export default function AdminDashboard({
         ? "Nonaktifkan Produk?"
         : "Aktifkan Kembali Produk?",
       message: isCurrentlyActive
-        ? `Apakah kamu yakin ingin me-nonaktifkan "${product.name}" dari toko "${product.storeName}"? Produk ini akan disembunyikan dari katalog mahasiswa.`
+        ? `Apakah kamu yakin ingin me-nonaktifkan "${product.name}" dari toko "${product.merchants?.store_name || merchants.find((merchant) => merchant.id === product.vendor_id)?.store_name || "-"}"? Produk ini akan disembunyikan dari katalog mahasiswa.`
         : `Aktifkan kembali "${product.name}" agar muncul kembali di katalog mahasiswa.`,
       actionType: "toggle_product",
       targetId: product.id,
@@ -86,13 +86,10 @@ export default function AdminDashboard({
 
   // Filter & Pagination Produk
   const filteredProducts = foods.filter((item) => {
-    if (productFilter === "latenight") return item.isLateNight;
-    if (productFilter === "promo")
-      return item.promoTag && item.promoTag !== "Reguler";
+    if (productFilter === "latenight") return item.is_late_night;
+    if (productFilter === "promo") return Boolean(item.promo_tag);
     if (productFilter === "regular")
-      return (
-        !item.isLateNight && (!item.promoTag || item.promoTag === "Reguler")
-      );
+      return !item.is_late_night && !item.promo_tag;
     return true;
   });
 
@@ -112,10 +109,8 @@ export default function AdminDashboard({
   // Summary Metrics
   const totalMerchantsCount = merchants.length;
   const totalProductsCount = foods.length;
-  const totalPromoCount = foods.filter(
-    (f) => f.promoTag && f.promoTag !== "Reguler",
-  ).length;
-  const totalMidnightCount = foods.filter((f) => f.isLateNight).length;
+  const totalPromoCount = foods.filter((food) => food.promo_tag).length;
+  const totalMidnightCount = foods.filter((food) => food.is_late_night).length;
 
   return (
     <div
@@ -375,7 +370,7 @@ export default function AdminDashboard({
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-semibold">
                       {paginatedMerchants.map((m, idx) => {
-                        const isMerchantActive = m.isActive !== false;
+                        const isMerchantActive = m.is_active !== false;
                         const globalIndex =
                           (merchantPage - 1) * ITEMS_PER_PAGE + idx + 1;
 
@@ -388,21 +383,20 @@ export default function AdminDashboard({
                               {globalIndex}
                             </td>
 
-                            {/* NAMA TOKO & PEMILIK (Bisa membaca storeName/name & ownerName/owner) */}
                             <td className="p-4">
                               <span
                                 className={`font-extrabold text-xs md:text-sm block transition-colors duration-200 ${
                                   darkMode ? "text-slate-100" : "text-slate-900"
                                 }`}
                               >
-                                {m.storeName || m.name || "Nama Toko"}
+                                {m.store_name || "Nama Toko"}
                               </span>
                               <span
                                 className={`text-[11px] font-medium block transition-colors duration-200 ${
                                   darkMode ? "text-slate-400" : "text-slate-500"
                                 }`}
                               >
-                                Pemilik: {m.ownerName || m.owner || "-"}
+                                Pemilik: {m.owner_name || "-"}
                               </span>
                             </td>
 
@@ -417,7 +411,7 @@ export default function AdminDashboard({
 
                             <td className="p-4">
                               <a
-                                href={m.gmapsUrl || "#"}
+                                href={m.gmaps_url || "#"}
                                 target="_blank"
                                 rel="noreferrer"
                                 className="text-emerald-600 dark:text-emerald-400 hover:underline font-extrabold inline-flex items-center gap-1 text-xs"
@@ -549,9 +543,7 @@ export default function AdminDashboard({
                   Reguler (
                   {
                     foods.filter(
-                      (f) =>
-                        !f.isLateNight &&
-                        (!f.promoTag || f.promoTag === "Reguler"),
+                      (food) => !food.is_late_night && !food.promo_tag,
                     ).length
                   }
                   )
@@ -563,12 +555,7 @@ export default function AdminDashboard({
                   }}
                   className={`px-3 py-1.5 rounded-xl transition-all whitespace-nowrap ${productFilter === "promo" ? "bg-amber-500 text-white shadow-sm" : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"}`}
                 >
-                  Diskon (
-                  {
-                    foods.filter((f) => f.promoTag && f.promoTag !== "Reguler")
-                      .length
-                  }
-                  )
+                  Diskon ({foods.filter((food) => food.promo_tag).length})
                 </button>
                 <button
                   onClick={() => {
@@ -577,7 +564,7 @@ export default function AdminDashboard({
                   }}
                   className={`px-3 py-1.5 rounded-xl transition-all whitespace-nowrap ${productFilter === "latenight" ? "bg-indigo-600 text-white shadow-sm" : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"}`}
                 >
-                  Midnight ({foods.filter((f) => f.isLateNight).length})
+                  Midnight ({foods.filter((food) => food.is_late_night).length})
                 </button>
               </div>
             </div>
@@ -596,6 +583,7 @@ export default function AdminDashboard({
                         <th className="p-4">Produk & Foto</th>
                         <th className="p-4">Kategori</th>
                         <th className="p-4">Nama UMKM</th>
+                        <th className="p-4">Harga</th>
                         <th className="p-4">Tag Promo</th>
                         <th className="p-4">Status</th>
                         <th className="p-4 text-right">Aksi Moderasi</th>
@@ -603,7 +591,7 @@ export default function AdminDashboard({
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-semibold">
                       {paginatedProducts.map((item, idx) => {
-                        const isProductActive = item.isActive !== false;
+                        const isProductActive = item.is_active !== false;
                         const globalIndex =
                           (productPage - 1) * ITEMS_PER_PAGE + idx + 1;
 
@@ -620,7 +608,7 @@ export default function AdminDashboard({
                               <div className="flex items-center gap-3">
                                 <img
                                   src={
-                                    item.image ||
+                                    item.image_url ||
                                     "https://via.placeholder.com/80"
                                   }
                                   alt={item.name}
@@ -649,29 +637,26 @@ export default function AdminDashboard({
                                 {item.category}
                               </span>
                             </td>
-<td className="p-4 font-extrabold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
-  {
-    // 1. Jika ter-JOIN dari Supabase (merchants.store_name)
-    item.merchants?.store_name ||
-    // 2. Jika ada di properti bawaan
-    item.store_name ||
-    item.storeName ||
-    // 3. Pencocokan manual berdasarkan vendor_id ke daftar merchants
-    merchants.find((m) => m.id === item.vendor_id)?.store_name ||
-    merchants.find((m) => m.id === item.vendor_id)?.storeName ||
-    "-"
-  }
-</td>
+                            <td className="p-4 font-extrabold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
+                              {item.merchants?.store_name ||
+                                merchants.find(
+                                  (merchant) => merchant.id === item.vendor_id,
+                                )?.store_name ||
+                                "-"}
+                            </td>
 
                             <td className="p-4">
-                              {item.isLateNight ? (
+                              Rp {Number(item.price).toLocaleString("id-ID")}
+                            </td>
+
+                            <td className="p-4">
+                              {item.is_late_night ? (
                                 <span className="text-[9px] font-black uppercase px-2.5 py-1 rounded-lg bg-indigo-600 text-white shadow-sm shadow-indigo-600/20 whitespace-nowrap">
                                   MIDNIGHT DEALS
                                 </span>
-                              ) : item.promoTag &&
-                                item.promoTag !== "Reguler" ? (
+                              ) : item.promo_tag ? (
                                 <span className="text-[9px] font-black uppercase px-2.5 py-1 rounded-lg bg-amber-500 text-white shadow-sm shadow-amber-500/20 whitespace-nowrap">
-                                  {item.promoTag}
+                                  {item.promo_tag}
                                 </span>
                               ) : (
                                 <span className="text-[9px] font-black uppercase px-2.5 py-1 rounded-lg bg-slate-200/80 dark:bg-slate-800 text-slate-500 dark:text-slate-400 whitespace-nowrap">

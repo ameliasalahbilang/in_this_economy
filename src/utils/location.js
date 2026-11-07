@@ -1,7 +1,7 @@
 export const UNS_COORDINATES = { lat: -7.558, lng: 110.856 };
 
-export const extractGoogleMapsCoordinates = (gmapsUrl) => {
-  const match = String(gmapsUrl || "").match(
+export const extractGoogleMapsCoordinates = (mapUrl) => {
+  const match = String(mapUrl || "").match(
     /@(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/,
   );
 
